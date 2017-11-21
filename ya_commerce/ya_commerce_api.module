@@ -356,7 +356,11 @@ function getBuilder($order, $amount, $paymentMethod, $order_wrapper)
                                            'type'      => $confirmationType,
                                            'returnUrl' => ya_commerce_api_get_return_url($order),
                                        )
-                                   );
+                                   )
+                                   ->setMetadata(array(
+                                       'cms_name'       => 'ya_api_drupal_commerce',
+                                       'module_version' => YAMONEY_MODULE_VERSION,
+                                   ));
 
     if (variable_get('yamoney_api_send_check', false)) {
         $builder->setReceiptEmail($order->mail);
