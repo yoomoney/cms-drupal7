@@ -1,0 +1,713 @@
+<?php
+
+use YaMoney\Client\YandexMoneyApi;
+use YaMoney\Common\Exceptions\ApiException;
+use YaMoney\Model\Status;
+use YaMoney\Request\Payments\CreatePaymentRequest;
+use YaMoney\Request\Payments\CreatePaymentRequestSerializer;
+
+$modulePath = drupal_get_path('module', 'yamoney_api');
+require_once $modulePath.'/YandexMoneyLogger.php';
+
+/**
+ * Implements hook_commerce_payment_method_info().
+ */
+function ya_commerce_api_commerce_payment_method_info()
+{
+    $payment_methods = array();
+    $icon_name       = (variable_get('yamoney_api_shop', 0) == 0) ? 'yandex-logo' : 'kassa-logo';
+    $icon            = theme(
+        'image',
+        array(
+            'path'       => drupal_get_path('module', 'ya_commerce_api').'/images/'.$icon_name.'.png',
+            'attributes' => array('class' => array('ya-commerce-logo')),
+        )
+    );
+
+    $display_title = '';
+    if (variable_get('yamoney_api_shop', 0)) {
+        $display_title = t('Яндекс.Касса (банковские карты, электронные деньги и другое)');
+    } else if (variable_get('yamoney_api_p2p', 0)) {
+        $display_title = t('Яндекс.Деньги (банковские карты, кошелек)');
+    } else if (variable_get('yamoney_api_billing_enable', 0)) {
+        $display_title = t('Yandex.Billing (bank card, e-wallets)');
+    }
+
+    $display_title                      .= '<br/>'.$icon;
+    $payment_methods['ya_commerce_api'] = array(
+        'base'                 => 'ya_commerce_api',
+        'title'                => t('Yandex.Money 2.0'),
+        'short_title'          => t('Yandex'),
+        'display_title'        => $display_title,
+        'description'          => t('Integration with Yandex.Money.'),
+        'terminal'             => false,
+        'offsite'              => true,
+        'offsite_autoredirect' => true,
+        'active'               => true,
+    );
+
+    return $payment_methods;
+}
+
+/**
+ * Implements hook_commerce_payment_method_settings_form().
+ */
+function ya_commerce_api_settings_form($settings = array())
+{
+    $form['widget'] = array(
+        '#type'          => 'radios',
+        '#title'         => t('Widget type'),
+        '#default_value' => isset($settings['widget']) ? $settings['widget'] : 'select',
+        '#options'       => array(
+            'select' => 'Select list',
+            'radios' => 'Radio buttons',
+            'images' => 'Images',
+        ),
+    );
+
+    return $form;
+}
+
+/**
+ * Payment method callback: checkout form.
+ */
+function ya_commerce_api_submit_form($payment_method, $pane_values, $checkout_pane, $order)
+{
+    $form = array();
+
+    $disabled = false;
+    $methods  = yamoney_api_get_enabled_payment_methods();
+
+    if (count($methods) === 1) {
+        $disabled = true;
+    }
+
+    if (variable_get('yamoney_api_paymode') == 'kassa' && variable_get('yamoney_api_shop', 0)) {
+        return;
+    }
+
+    $default_value = variable_get('yamoney_api_default_payment_method', YAMONEY_API_DEFAULT_PAYMENT_METHOD);
+    if (isset($pane_values['payment_details']['payment_method'])) {
+        $default_value = $pane_values['payment_details']['payment_method'];
+    }
+
+    if (!isset($payment_method['settings']['widget'])) {
+        $payment_method['settings']['widget'] = 'radios';
+    }
+
+    switch ($payment_method['settings']['widget']) {
+        case 'select':
+            if (variable_get('yamoney_api_billing_enable')) {
+                $form['customer_name'] = array(
+                    '#type'     => 'textfield',
+                    '#title'    => t('Payer\'s full name'),
+                    '#required' => true,
+                );
+            } else {
+                $form['payment_method'] = array(
+                    '#type'          => 'radios',
+                    '#title'         => t('Select your payment type:'),
+                    '#default_value' => $default_value,
+                    '#options'       => $methods,
+                    '#disabled'      => $disabled,
+                    '#theme'         => 'form_radios_element',
+                );
+            }
+
+            break;
+
+        case 'radios':
+            if (variable_get('yamoney_api_billing_enable')) {
+                $form['customer_name'] = array(
+                    '#type'     => 'textfield',
+                    '#title'    => t('Payer\'s full name'),
+                    '#required' => true,
+                );
+            } else {
+                $options = array();
+                foreach ($methods as $key => $title) {
+                    $options[$key] = '<span class="ya-commerce__method ya-commerce__method_'.$key.'">'.$title.'</span>';
+                }
+
+                $form['payment_method'] = array(
+                    '#type'          => 'radios',
+                    '#title'         => t('Select your payment type:'),
+                    '#default_value' => $default_value,
+                    '#options'       => $options,
+                    '#disabled'      => $disabled,
+                    '#prefix'        => '<div id="ym-payment_methods">',
+                    '#theme'         => 'form_radios_element',
+                    '#ajax'          => array(
+                        'callback' => 'ajax_payment_method_form_callback',
+                        'method'   => 'replace',
+                        'effect'   => 'fade',
+                        'wrapper'  => 'ym-payment_methods',
+                    ),
+                );
+            }
+
+            break;
+
+        case 'images':
+            if (variable_get('yamoney_api_billing_enable')) {
+                $form['customer_name'] = array(
+                    '#type'     => 'textfield',
+                    '#title'    => t('Payer\'s full name'),
+                    '#required' => true,
+                );
+            } else {
+                $options = array();
+                $path    = drupal_get_path('module', 'ya_commerce_api').'/images/';
+                foreach ($methods as $key => $title) {
+                    $options[$key] = '';
+
+                    $options[$key] = '<span class=" ya-commerce__method_'.$key.'">';
+
+                    $options[$key] = theme(
+                        'image',
+                        array(
+                            'path'       => $path.'icon-'.$key.'.png',
+                            'attributes' => array(
+                                'class' => array('ya-commerce__method-icon'),
+                            ),
+                        )
+                    );
+
+                    $options[$key] .= '<span class="ya-commerce__method-title">'.$title.'</span>';
+
+                    $options[$key] .= '</span>';
+                }
+                $form['payment_method'] = array(
+                    '#type'          => 'radios',
+                    '#title'         => t('Select your payment type:'),
+                    '#default_value' => $default_value,
+                    '#options'       => $options,
+                    '#disabled'      => $disabled,
+                    '#theme'         => 'form_radios_element',
+                );
+            }
+            break;
+    }
+
+    return $form;
+}
+
+function ya_commerce_api_submit_form_validate(
+    $payment_method,
+    $pane_form,
+    $pane_values,
+    $order,
+    $form_parents = array()
+) {
+    if (variable_get('yamoney_api_shop') == 1) {
+        if ($pane_values['payment_method'] == 'alfabank') {
+            if (isset($_POST['alfabank_login']) && $_POST['alfabank_login'] !== '') {
+                return true;
+            } else {
+                drupal_set_message('Поле логин в Альфа клике заполнено неверно', 'error');
+
+                return false;
+            }
+        } elseif ($pane_values['payment_method'] == 'qiwi') {
+            if (isset($_POST['qiwi_phone'])) {
+                $phone = $_POST['qiwi_phone'];
+                $phone = preg_replace('/[^\d]/', '', $phone);
+                if ($phone && preg_match('/^[0-9]{4,15}$/', $phone)) {
+                    return true;
+                } else {
+                    drupal_set_message('Поле телефон заполнено неверно.', 'error');
+
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
+    } else {
+        if (isset($pane_values['customer_name'])) {
+            $customerName = trim($pane_values['customer_name']);
+            $parts        = preg_split('/\s+/', $customerName);
+            if ($customerName
+                && count($parts) != 3
+            ) {
+                form_set_error('customer_name', 'Ф.И.О. плательщика введено не верно.');
+
+                return false;
+            }
+        }
+    }
+}
+
+/**
+ * Payment method callback: checkout form submission.
+ */
+function ya_commerce_api_submit_form_submit($payment_method, $pane_form, $pane_values, $order, $charge)
+{
+    if (variable_get('yamoney_api_shop', 1)) {
+        $modulePath = drupal_get_path('module', 'yamoney_api');
+        require_once $modulePath.DIRECTORY_SEPARATOR.'vendor'.DIRECTORY_SEPARATOR.'autoload.php';
+        $shopId       = variable_get('yamoney_api_shop_id');
+        $shopPassword = variable_get('yamoney_api_secret');
+        $apiClient    = new YandexMoneyApi();
+        $apiClient->setLogger(new YandexMoneyLogger());
+        $apiClient->setAuth($shopId, $shopPassword);
+
+        $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
+        $currency_code = $order_wrapper->commerce_order_total->currency_code->value();
+        $amount        = $order_wrapper->commerce_order_total->amount->value();
+        $amount        = round(commerce_currency_amount_to_decimal($amount, $currency_code), 2);
+
+        if (variable_get('yamoney_api_paymode') == 'kassa') {
+            $paymentMethod = '';
+        } else {
+            $paymentMethod = $pane_values['payment_method'];
+            if (!$paymentMethod) {
+                $paymentMethod = variable_get('yamoney_api_default_payment_method', YAMONEY_API_DEFAULT_PAYMENT_METHOD);
+            };
+        }
+
+        $builder        = getBuilder($order, $amount, $paymentMethod, $order_wrapper);
+        $paymentRequest = $builder->build();
+        $serializer     = new CreatePaymentRequestSerializer();
+        $serializedData = $serializer->serialize($paymentRequest);
+        $idempotencyKey = $order->order_number.'_'.$paymentMethod.'_'.uniqid();
+        YandexMoneyLogger::info('Create payment request: '.json_encode($serializedData));
+        YandexMoneyLogger::info('Idempotency key : '.$idempotencyKey);
+        try {
+            $tries = 0;
+            do {
+                $response = $apiClient->createPayment(
+                    $paymentRequest,
+                    $idempotencyKey
+                );
+                $tries++;
+                if ($tries > 3) {
+                    YandexMoneyLogger::info('Maximum create payment tries reached. Order id - '.$order->order_number);
+                    drupal_set_message('Неудалось создать платеж.', 'error');
+                    break;
+                }
+            } while ($response == null);
+            if ($response) {
+                if ($response->status !== Status::CANCELED) {
+                    $transaction                = commerce_payment_transaction_new(
+                        'commerce_payment_ya_commerce_api',
+                        $order->order_id
+                    );
+                    $transaction->instance_id   = $payment_method['instance_id'];
+                    $transaction->remote_id     = $response->id;
+                    $transaction->amount        = intval($amount) * 100;
+                    $transaction->currency_code = $currency_code;
+                    $transaction->status        = COMMERCE_PAYMENT_STATUS_PENDING;
+                    commerce_order_status_update($order, 'checkout_payment');
+                    if (commerce_payment_transaction_save($transaction) && commerce_order_save($order)) {
+                        $confirmationUrl = $response->confirmation->confirmationUrl;
+                        drupal_goto($confirmationUrl);
+                    }
+                } else {
+                    YandexMoneyLogger::error('Payment not created. Order id: '.$order->order_number);
+                    drupal_set_message('Неудалось создать платеж.', 'error');
+                }
+            }
+
+        } catch (ApiException $e) {
+            YandexMoneyLogger::error('Api error: '.$e->getMessage());
+            drupal_set_message('Не удалось заплатить этим методом.', 'error');
+            drupal_goto(request_uri());
+        }
+    }
+    $order->data['ya_commerce_api'] = $pane_values;
+}
+
+/**
+ * @param $order
+ * @param $amount
+ * @param $paymentMethod
+ * @param $order_wrapper
+ *
+ * @return \YaMoney\Request\Payments\CreatePaymentRequestBuilder
+ */
+function getBuilder($order, $amount, $paymentMethod, $order_wrapper)
+{
+    $confirmationType = \YaMoney\Model\ConfirmationType::REDIRECT;
+    if ($paymentMethod == 'alfabank') {
+        $confirmationType = \YaMoney\Model\ConfirmationType::EXTERNAL;
+        $paymentMethod    = new \YaMoney\Model\PaymentData\PaymentDataAlfabank();
+        try {
+            $paymentMethod->setLogin($_POST['alfabank_login']);
+        } catch (Exception $e) {
+            drupal_set_message('Поле логин заполнено неверно.', 'error');
+        }
+    } elseif ($paymentMethod == 'qiwi') {
+        $paymentMethod = new \YaMoney\Model\PaymentData\PaymentDataQiwi();
+        try {
+            $phone = preg_replace('/[^\d]/', '', $_POST['qiwi_phone']);
+            $paymentMethod->setPhone($phone);
+        } catch (Exception $e) {
+            drupal_set_message('Поле телефон заполнено неверно.', 'error');
+        }
+    }
+    YandexMoneyLogger::info('Return url: '.ya_commerce_api_get_return_url($order));
+    $builder = CreatePaymentRequest::builder()
+                                   ->setAmount($amount)
+                                   ->setPaymentMethodData($paymentMethod)
+                                   ->setCapture(false)
+                                   ->setConfirmation(
+                                       array(
+                                           'type'      => $confirmationType,
+                                           'returnUrl' => ya_commerce_api_get_return_url($order),
+                                       )
+                                   );
+
+    if (variable_get('yamoney_api_send_check', false)) {
+        $builder->setReceiptEmail($order->mail);
+        foreach ($order_wrapper->commerce_line_items as $delta => $line_item_wrapper) {
+            if ($line_item_wrapper->value()->type == 'product') {
+                $product    = $line_item_wrapper->commerce_product->value();
+                $components = $product->commerce_price['und'][0]['data']['components'];
+                $tax_id     = false;
+                foreach ($components as $component) {
+                    $info = explode('|', $component['name']);
+                    if (count($info) && $info[0] == 'tax') {
+                        $tax_id = $info[1];
+                        break;
+                    }
+                }
+
+                $quantity = $line_item_wrapper->quantity->value();
+                $tax      = ($tax_id
+                             && variable_get('yamoney_api_kassa_tax_'.$tax_id) ? variable_get(
+                    'yamoney_api_kassa_tax_'.$tax_id
+                )
+                    : YAMONEY_API_DEFAULT_TAX_RATE_ID
+                );
+                $amount   = getPriceByData(
+                    $product->commerce_price['und'][0]['amount'],
+                    $product->commerce_price['und'][0]['currency_code']
+                );
+
+                $builder->addReceiptItem($product->title, $amount, $quantity, $tax);
+            }
+
+            if ($line_item_wrapper->value()->type == 'shipping') {
+                $shipping = $line_item_wrapper->value();
+                $amount   = getPriceByData(
+                    $shipping->commerce_total['und'][0]['amount'],
+                    $shipping->commerce_total['und'][0]['currency_code']
+                );
+                $builder->addReceiptShipping('Доставка', $amount, YAMONEY_API_DEFAULT_TAX_RATE_ID);
+            }
+        }
+    }
+
+    return $builder;
+}
+
+function getPriceByData($amount, $currency_code)
+{
+    $currency     = commerce_currency_load($currency_code);
+    $amount_price = commerce_currency_amount_to_decimal($amount, $currency_code);
+    $price        = number_format(
+        commerce_currency_round(
+            abs($amount_price),
+            $currency
+        ),
+        $currency['decimals'],
+        $currency['decimal_separator'],
+        $currency['thousands_separator']
+    );
+
+    return $price;
+}
+
+/**
+ * Payment method callback: redirect form.
+ *
+ * A wrapper around the module's general use function for building a submit form.
+ */
+function ya_commerce_api_redirect_form($form, &$form_state, $order, $payment_method)
+{
+    global $user;
+
+    $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
+    $currency_code = $order_wrapper->commerce_order_total->currency_code->value();
+    $amount        = $order_wrapper->commerce_order_total->amount->value();
+    $amount        = round(commerce_currency_amount_to_decimal($amount, $currency_code), 2);
+
+    $transaction           = new YAMoneyApiTransaction();
+    $transaction->uid      = isset($user->uid) ? $user->uid : 0;
+    $transaction->uid      = isset($user->uid) ? $user->uid : '';
+    $transaction->amount   = $amount;
+    $transaction->mail     = isset($user->mail) ? $user->mail : '';
+    $transaction->order_id = $order->order_id;
+
+    if (!yamoney_api_transaction_save($transaction)) {
+        $error_message = t('Can not save transaction.');
+
+        // create failure commerce transaction
+        ya_commerce_create_commerce_transaction($transaction, COMMERCE_PAYMENT_STATUS_FAILURE, '');
+
+        // show message to the user
+        drupal_set_message(t('Payment failed: %message', array('%message' => $error_message)), 'error');
+
+        // log error to watchdog
+        watchdog('ya_commerce_api', 'Payment failed: %message', array('%message' => $error_message), WATCHDOG_WARNING);
+
+        // redirect back to checkout
+        $cancel_url = ya_commerce_api_get_checkout_url($order, false);
+        drupal_goto($cancel_url);
+    }
+
+    $target_url = yamoney_api_get_order_submission_url();
+    $params     = yamoney_api_get_order_submission_params($transaction);
+
+    $form['#action'] = $target_url;
+    foreach ($params as $key => $value) {
+        if ($key == 'fio') {
+            $form[$key] = array(
+                '#type'  => 'hidden',
+                '#value' => $order->data['ya_commerce_api']['customer_name'],
+            );
+        } else {
+            $form[$key] = array(
+                '#type'  => 'hidden',
+                '#value' => $value,
+            );
+        }
+    }
+    $form['actions']           = array('#type' => 'actions');
+    $form['actions']['submit'] = array(
+        '#type'  => 'submit',
+        '#value' => t('Submit order'),
+    );
+    $form['cms_name']          = array(
+        '#type'  => 'hidden',
+        '#value' => "drupal-commerce",
+    );
+
+
+    return $form;
+}
+
+/**
+ * Payment method callback: redirect form return validation.
+ */
+function ya_commerce_api_redirect_form_validate($order, $payment_method)
+{
+    return true;
+}
+
+/**
+ * Implements hook_yamoney_api_shop_params_alter().
+ *
+ * @param $params
+ */
+function ya_commerce_api_yamoney_api_shop_params_alter(&$params)
+{
+    $order = commerce_order_load($params['order_id']);
+
+    if ($order) {
+        // Selected payment method
+        if (isset($order->data['ya_commerce_api'])) {
+            $params['paymentType'] = $order->data['ya_commerce_api']['payment_method'];
+        }
+
+        // Return to the payment redirect page for processing successful payments
+        $params['shopSuccessURL'] = ya_commerce_api_get_checkout_url($order, true);
+
+        // Return to the previous page when payment is canceled
+        $params['shopFailURL'] = ya_commerce_api_get_checkout_url($order, false);
+    }
+}
+
+/**
+ * Implements hook_yamoney_quick_params_alter().
+ *
+ * @param $params
+ */
+function ya_commerce_api_yamoney_api_quick_params_alter(&$params)
+{
+    $order = commerce_order_load($params['order_id']);
+
+    // Selected payment method
+    $params['paymentType'] = $order->data['ya_commerce_api']['payment_method'];
+}
+
+/**
+ * Process successful payment to update Commerce entities.
+ * Implements hook_yamoney_api_process_payment_alter().
+ *
+ * @param array $payment
+ */
+function ya_commerce_api_yamoney_api_process_payment_alter(&$payment)
+{
+    /** @var YAMoneyApiTransaction $transaction */
+    $transaction = $payment['transaction'];
+    $order       = commerce_order_load($transaction->order_id);
+    if ($order) {
+        ya_commerce_create_commerce_transaction(
+            $transaction,
+            COMMERCE_PAYMENT_STATUS_SUCCESS,
+            '',
+            array(),
+            $payment['request']
+        );
+        $payment['success'] = true;
+    } else {
+        $payment['success'] = false;
+        $payment['error']   = 'Can not find order with id '.$transaction->order_id;
+    }
+}
+
+/**
+ * @param stdClass $order
+ * @param bool $success
+ *
+ * @return string
+ */
+function ya_commerce_api_get_checkout_url($order, $success = true)
+{
+    return url(
+        'checkout/'.$order->order_id.'/payment/'.($success ? 'return' : 'back').'/'.$order->data['payment_redirect_key'],
+        array('absolute' => true)
+    );
+}
+
+function ya_commerce_api_get_return_url($order)
+{
+    return url(
+        'yamoney_api/commerce/return',
+        array(
+            'absolute' => true,
+            'query'    => array('orderId' => $order->order_id),
+        )
+    );
+}
+
+
+/**
+ * Implements hook_yamoney_api_complete();
+ */
+function ya_commerce_yamoney_api_complete()
+{
+    if (isset($_GET['shopSuccessURL'])) {
+        drupal_goto($_GET['shopSuccessURL']);
+    }
+}
+
+/**
+ * Implements hook_yamoney_api_fail();
+ */
+function ya_commerce_api_yamoney_api_fail()
+{
+    if (isset($_GET['shopFailURL'])) {
+        drupal_goto($_GET['shopFailURL']);
+    }
+}
+
+function ya_commerce_api_theme()
+{
+    $items                                = array();
+    $items['form_radio_element']          = array('render element' => 'element');
+    $items['form_radios_element']         = array('render element' => 'element');
+    $items['form_radio_element_external'] = array('render element' => 'element');
+
+    return $items;
+}
+
+function ya_commerce_api_theme_registry_alter(&$theme_registry)
+{
+    $theme_registry['form_radios_element']['function']         = "theme_ya_commerce_api_form_radios_element";
+    $theme_registry['form_radio_element']['function']          = "theme_ya_commerce_api_form_radio_element";
+    $theme_registry['form_radio_element_external']['function'] = "theme_ya_commerce_api_form_radio_element_external";
+}
+
+function theme_ya_commerce_api_form_radios_element($variables)
+{
+    $element = $variables['element'];
+
+    if ($element['#value'] == 'alfabank') {
+        $element['alfabank']['#theme'] = 'form_radio_element_external';
+    } else if ($element['#value'] == 'qiwi') {
+        $element['qiwi']['#theme'] = 'form_radio_element_external';
+    }
+
+    foreach (element_children($element) as $key) {
+
+        if ($element[$key]['#theme'] !== 'form_radio_element_external') {
+            $element[$key]['#theme'] = 'form_radio_element';
+        }
+        $element[$key]['#method_name'] = $element[$key]['#title'];
+        $element[$key]['#title']       = '';
+    }
+    $items = drupal_render_children($element);
+
+    return '<div '.drupal_attributes($element['#attributes']).'>'.$items.'</div>';
+}
+
+function theme_ya_commerce_api_form_radio_element($variables)
+{
+    $element                        = $variables['element'];
+    $element['#attributes']['type'] = 'radio';
+    element_set_attributes(
+        $element,
+        array(
+            'id',
+            'name',
+            '#return_value' => 'value',
+        )
+    );
+    if (isset($element['#return_value']) && $element['#value'] !== false && $element['#value'] == $element['#return_value']) {
+        $element['#attributes']['checked'] = 'checked';
+    }
+    _form_set_class($element, array('form-radio'));
+    $output = '<input'.drupal_attributes($element['#attributes']).' />';
+    $output .= '<label for="'.$element['#id'].'" class="option">'.$element['#method_name'].'</label>';
+
+    return '<div class="form-item form-type-radio">'.$output.'</div>';
+}
+
+function theme_ya_commerce_api_form_radio_element_external($variables)
+{
+    $element                        = $variables['element'];
+    $element['#attributes']['type'] = 'radio';
+    element_set_attributes(
+        $element,
+        array(
+            'id',
+            'name',
+            '#return_value' => 'value',
+        )
+    );
+    if (isset($element['#return_value']) && $element['#value'] !== false && $element['#value'] == $element['#return_value']) {
+        $element['#attributes']['checked'] = 'checked';
+    }
+    _form_set_class($element, array('form-radio'));
+    $output = '<input'.drupal_attributes($element['#attributes']).' />';
+    $output .= '<label for="'.$element['#id'].'" class="option">'.$element['#method_name'].'</label>';
+
+    if ($element['#value'] == 'alfabank') {
+        $output .= '<div>';
+        $output .= '<div>Укажите логин, и мы выставим счет в Альфа-Клике. После этого останется подтвердить платеж на сайте интернет-банка.</div>';
+        $output .= '<input type="text" name="alfabank_login">';
+        $output .= '</div>';
+    } elseif ($element['#value'] == 'qiwi') {
+        $output .= '<div>';
+        $output .= '<div>Телефон, который привязан к Qiwi Wallet</div>';
+        $output .= '<input type="text" name="qiwi_phone">';
+        $output .= '</div>';
+    }
+
+    return '<div class="form-item form-type-radio">'.$output.'</div>';
+}
+
+function ajax_payment_method_form_callback(&$form, &$form_state)
+{
+    $form_state['rebuild'] = true;
+    if ($form_state['values']['commerce_payment']['payment_details']['payment_method'] == 'qiwi') {
+        $form['commerce_payment']['payment_details']['payment_method']['qiwi']['#theme'] = 'form_radio_element_external';
+    } else if ($form_state['values']['commerce_payment']['payment_details']['payment_method'] == 'alfabank') {
+        $form['commerce_payment']['payment_details']['payment_method']['alfabank']['#theme'] = 'form_radio_element_external';
+    }
+
+    return $form['commerce_payment']['payment_details']['payment_method'];
+}
