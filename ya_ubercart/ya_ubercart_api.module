@@ -221,7 +221,11 @@ function getBuilder($order, $amount, $paymentMethod)
                                            'type'      => $confirmationType,
                                            'returnUrl' => ya_ubercart_api_get_return_url($order),
                                        )
-                                   );
+                                   )
+                                   ->setMetadata(array(
+                                       'cms_name'       => 'ya_api_drupal_ubercart',
+                                       'module_version' => YAMONEY_MODULE_VERSION,
+                                   ));
     YandexMoneyLogger::info('Return url:'.ya_ubercart_api_get_return_url($order));
     $tax = uc_taxes_uc_calculate_tax($order);
     if (module_exists('uc_taxes') && count($tax) && variable_get('yamoney_api_send_check', false)) {
