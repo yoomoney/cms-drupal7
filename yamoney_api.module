@@ -15,7 +15,7 @@ define('YAMONEY_API_CHECK_RESULT_CODE_ERROR_MD5', 1);
 define('YAMONEY_API_CHECK_RESULT_CODE_ERROR_CUSTOM', 100);
 define('YAMONEY_API_CHECK_RESULT_CODE_ERROR_REQUEST', 200);
 define('YAMONEY_API_DEFAULT_TAX_RATE_ID', 1);
-
+define('YAMONEY_MODULE_VERSION', '1.0.1');
 define('YAMONEY_API_DEFAULT_PAYMENT_METHOD', \YaMoney\Model\PaymentMethodType::BANK_CARD);
 define('QUICK_API_PAY_VERSION', 2);
 
@@ -250,19 +250,19 @@ function yamoney_api_commerce_return_page()
                     if ($paymentResult) {
                         $transaction->remote_status = $paymentResult->status;
 
-
+                        $url = 'yamoney_api/fail';
                         if ($paymentResult->status == PaymentStatus::SUCCEEDED) {
                             commerce_order_status_update($order, 'completed');
                             YandexMoneyLogger::info(
                                 'Payment succeded. Redirect: '.url('yamoney_api/success', array('absolute' => true))
                             );
-                            drupal_goto('yamoney_api/success');
+                            $url = 'yamoney_api/success';
                         } elseif ($paymentResult->status == PaymentStatus::PENDING) {
                             commerce_order_status_update($order, 'pending');
                             YandexMoneyLogger::info(
                                 'Payment pending. Redirect: '.url('yamoney_api/fail', array('absolute' => true))
                             );
-                            drupal_goto('yamoney_api/fail');
+                            $url = 'yamoney_api/fail';
                         } elseif ($paymentResult->status == PaymentStatus::WAITING_FOR_CAPTURE) {
                             commerce_order_status_update($order, 'processing');
                             $tries = 0;
@@ -285,7 +285,8 @@ function yamoney_api_commerce_return_page()
                                 }
                             } while ($captureResult === null);
                             if ($captureRequest) {
-                                if ($captureResult->status == PaymentStatus::SUCCEEDED) {
+                                $transaction->remote_status = $captureResult->getStatus();
+                                if ($captureResult->getStatus() == PaymentStatus::SUCCEEDED) {
                                     commerce_order_status_update($order, 'completed');
                                     YandexMoneyLogger::info(
                                         'Payment succseded. Redirect: '.url(
@@ -293,7 +294,7 @@ function yamoney_api_commerce_return_page()
                                             array('absolute' => true)
                                         )
                                     );
-                                    drupal_goto('yamoney_api/success');
+                                    $url = 'yamoney_api/success';
                                 } else {
                                     YandexMoneyLogger::info(
                                         'Payment canceled. Redirect: '.url(
@@ -301,7 +302,7 @@ function yamoney_api_commerce_return_page()
                                             array('absolute' => true)
                                         )
                                     );
-                                    drupal_goto('yamoney_api/fail');
+                                    $url = 'yamoney_api/fail';
                                 }
                             }
                         } elseif ($paymentResult->status == PaymentStatus::CANCELED) {
@@ -309,10 +310,12 @@ function yamoney_api_commerce_return_page()
                                 'Payment canceled. Redirect: '.url('yamoney_api/fail', array('absolute' => true))
                             );
                             commerce_order_status_update($order, 'checkout_payment');
-                            drupal_goto('yamoney_api/fail');
+                            $url = 'yamoney_api/fail';
                         }
-                    }
 
+                        commerce_payment_transaction_save($transaction);
+                        drupal_goto($url);
+                    }
 
                 } catch (Exception $e) {
                     YandexMoneyLogger::info(
