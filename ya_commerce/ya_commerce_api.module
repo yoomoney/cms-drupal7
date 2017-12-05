@@ -289,15 +289,13 @@ function ya_commerce_api_submit_form_submit($payment_method, $pane_form, $pane_v
             } while ($response == null);
             if ($response) {
                 if ($response->status !== Status::CANCELED) {
-                    $transaction                = commerce_payment_transaction_new(
-                        'commerce_payment_ya_commerce_api',
-                        $order->order_id
-                    );
+                    $transaction = commerce_payment_transaction_new($payment_method['instance_id'], $order->order_id);
                     $transaction->instance_id   = $payment_method['instance_id'];
                     $transaction->remote_id     = $response->id;
                     $transaction->amount        = intval($amount) * 100;
                     $transaction->currency_code = $currency_code;
                     $transaction->status        = COMMERCE_PAYMENT_STATUS_PENDING;
+                    $transaction->remote_status = $response->getStatus();
                     commerce_order_status_update($order, 'checkout_payment');
                     if (commerce_payment_transaction_save($transaction) && commerce_order_save($order)) {
                         $confirmationUrl = $response->confirmation->confirmationUrl;
