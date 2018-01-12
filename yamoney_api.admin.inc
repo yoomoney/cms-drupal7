@@ -17,7 +17,7 @@ function yamoney_api_admin_settings()
         );
     }
 
-    remove_duplicate_messages('warning');
+    yamoney_api_admin_remove_duplicate_messages('warning');
 
     $form                                      = array();
     $form['yamoney_api_all']                   = array(
@@ -455,6 +455,8 @@ function yamoney_api_admin_settings_validate($form, &$form_state)
             );
         }
 
+        $valid = true;
+
         if (!preg_match('/^\d+$/i', $form_state['values']['yamoney_api_shop_id'])) {
             form_set_error(
                 'yamoney_api_shop_id',
@@ -462,6 +464,7 @@ function yamoney_api_admin_settings_validate($form, &$form_state)
                 <a href="https://money.yandex.ru/joinups">личном кабинете Яндекс.Кассы</a>
                 (наверху любой страницы)'
             );
+            $valid = false;
         }
 
         if (!preg_match('/^test_.*|live_.*$/i', $form_state['values']['yamoney_api_secret'])) {
@@ -471,6 +474,21 @@ function yamoney_api_admin_settings_validate($form, &$form_state)
                   Выпустите и активируйте ключ заново — 
                   <a href="https://money.yandex.ru/joinups">в личном кабинете Яндекс.Кассы</a>'
             );
+            $valid = false;
+        }
+
+        if ($valid) {
+            $shopId = $form_state['values']['yamoney_api_shop_id'];
+            $password = $form_state['values']['yamoney_api_secret'];
+            if (!yamoney_api_admin_settings_test_connection($shopId, $password)) {
+                drupal_set_message(
+                    'Проверьте shopId и Секретный ключ — где-то есть ошибка. А лучше скопируйте их прямо из'
+                        . ' <a href="https://kassa.yandex.ru/my" target="_blank">личного кабинета Яндекс.Кассы</a>',
+                    'warning'
+                );
+                form_set_error('yamoney_api_shop_id', '');
+                form_set_error('yamoney_api_secret', '');
+            }
         }
     }
 
@@ -627,7 +645,7 @@ function getUcOrderStatuses()
     return $query->fetchAllKeyed();
 }
 
-function remove_duplicate_messages($type)
+function yamoney_api_admin_remove_duplicate_messages($type)
 {
     $stack = array();
     if (isset($_SESSION['messages'][$type])) {
@@ -641,4 +659,23 @@ function remove_duplicate_messages($type)
             }
         }
     }
+}
+
+function yamoney_api_admin_settings_test_connection($shopId, $password)
+{
+    require_once dirname(__FILE__) . '/YandexMoneyLogger.php';
+    require_once dirname(__FILE__) . '/vendor/autoload.php';
+
+    $apiClient    = new \YaMoney\Client\YandexMoneyApi();
+    $apiClient->setAuth($shopId, $password);
+    $apiClient->setLogger(new YandexMoneyLogger());
+
+    try {
+        $payment = $apiClient->getPaymentInfo('00000000-0000-0000-0000-000000000001');
+    } catch (\YaMoney\Common\Exceptions\NotFoundException $e) {
+        return true;
+    } catch (\Exception $e) {
+        return false;
+    }
+    return true;
 }
