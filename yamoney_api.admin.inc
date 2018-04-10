@@ -23,7 +23,7 @@ function yamoney_api_admin_settings()
     $form['yamoney_api_all']                   = array(
         '#type'        => 'fieldset',
         '#description' => t(
-            'Работая с модулем, вы автоматически соглашаетесь с <a href="https://money.yandex.ru/doc.xml?id=527132" target="_blank">условиями его использования</a>.'
+            'By operating the module, you automatically agree with <a href=\'https://money.yandex.ru/doc.xml?id=527132\' target=\'_blank\'>its Terms and Conditions of Use</a>.'
         ),
         '#weight'      => 10,
     );
@@ -45,22 +45,22 @@ function yamoney_api_admin_settings()
     );
     $form['yamoney_api_kassa_tab']                = array(
         '#type'   => 'fieldset',
-        '#title'  => t('Yandex.Kassa'),
+        '#title'  => t('Yandex.Checkout'),
         '#group'  => 'vertical_tabs',
         '#weight' => 10,
     );
     $form['yamoney_api_kassa_tab']['lbl_setting'] = array(
-        '#markup' => t('<h3>Shop setting</h3>'),
+        '#markup' => t('<h3>Store settings</h3>'),
     );
     $form['yamoney_api_kassa_tab']['intro']       = array(
         '#markup' => t(
-            'Для работы с модулем нужно подключить магазин к <a target="_blank" href="https://kassa.yandex.ru/">Яндекс.Кассе</a>.'
+            'To start operating the module, you need to connect your store to <a target="_blank" href="https://checkout.yandex.com/">Yandex.Checkout</a>'
         ),
     );
 
     $form['yamoney_api_kassa_tab']['yamoney_api_shop'] = array(
         '#type'          => 'checkbox',
-        '#title'         => t('Включить приём платежей через Яндекс.Кассу'),
+        '#title'         => t('Enable payment acceptance via Yandex.Checkout'),
         '#attributes'    => array('id' => 'kassa-checkbox'),
         '#default_value' => variable_get('yamoney_api_shop', 0),
     );
@@ -69,15 +69,15 @@ function yamoney_api_admin_settings()
     $form['yamoney_api_kassa_tab']['yamoney_api_shop_id'] = array(
         '#type'          => 'textfield',
         '#title'         => t('shopId'),
-        '#description'   => t('Скопируйте shopId из личного кабинета Яндекс.Кассы'),
+        '#description'   => t('Copy shopId from your Yandex.Checkout\'s Merchant Profile'),
         '#default_value' => variable_get('yamoney_api_shop_id', ''),
         '#size'          => 4,
     );
     $form['yamoney_api_kassa_tab']['yamoney_api_secret']  = array(
         '#type'          => 'textfield',
-        '#title'         => t('Секретный ключ'),
+        '#title'         => t('Secret key'),
         '#description'   => t(
-            'Выпустите и активируйте секретный ключ в личном кабинете Яндекс.Кассы. Потом скопируйте его сюда.'
+            'Issue and activate a secret key under your Yandex.Checkout\'s Merchant Profile. Then copy it here.'
         ),
         '#default_value' => variable_get('yamoney_api_secret', ''),
         '#size'          => 17,
@@ -90,10 +90,10 @@ function yamoney_api_admin_settings()
     );
     $form['yamoney_api_kassa_tab']['yamoney_api_paymode'] = array(
         '#type'          => 'select',
-        '#title'         => t('Payments mode'),
+        '#title'         => t('Select payment method'),
         '#options'       => array(
-            'kassa' => t('Kassa mode'),
-            'shop'  => t('Shop mode'),
+            'kassa' => t('On Yandex.Checkout\'s site'),
+            'shop'  => t('On the store\'s site'),
         ),
         '#default_value' => variable_get('yamoney_api_paymode', 'kassa'),
     );
@@ -129,10 +129,10 @@ function yamoney_api_admin_settings()
     if (module_exists('commerce_tax') && module_exists('commerce_tax_ui')) {
         $form['yamoney_api_kassa_tab']['yamoney_api_send_check'] = array(
             '#type'          => 'radios',
-            '#title'         => t('Отправлять в Яндекс.Кассу данные для чеков (54-ФЗ)'),
+            '#title'         => t('Transmit details for receipts to Yandex.Checkout (Federal Law No. 54-FZ)'),
             '#options'       => array(
-                '1' => t('Включить'),
-                '0' => t('Выключить'),
+                '1' => t('Enable'),
+                '0' => t('Disable'),
             ),
             '#default_value' => variable_get('yamoney_api_send_check', '0'),
         );
@@ -148,10 +148,10 @@ function yamoney_api_admin_settings()
                 '#markup' => '<div>',
             );
             $form['yamoney_api_kassa_tab']['lbl_shop_tax']          = array(
-                '#markup' => t('<div style="float: left;width: 200px;">Ставка в вашем магазине.</div>'),
+                '#markup' => '<div style="float: left;width: 200px;">'. t('Rate at your store').'</div>',
             );
             $form['yamoney_api_kassa_tab']['lbl_kassa_tax']         = array(
-                '#markup' => t('<div>Ставка для чека в налоговую.</div>'),
+                '#markup' => '<div>'.t('Rate for the receipt sent to the tax service').'</div>',
             );
             $form['yamoney_api_kassa_tab']['lbl_wrapper_tax_end']   = array(
                 '#markup' => '</div>',
@@ -165,12 +165,12 @@ function yamoney_api_admin_settings()
                     '#type'          => 'select',
                     '#title_display' => false,
                     '#options'       => array(
-                        1 => t('Без НДС'),
+                        1 => t('Without VAT'),
                         2 => t('0%'),
                         3 => t('10%'),
                         4 => t('18%'),
-                        5 => t('Расчётная ставка 10/110'),
-                        6 => t('Расчётная ставка 18/118'),
+                        5 => t('Applicable rate 10/110'),
+                        6 => t('Applicable rate 18/118'),
                     ),
                     '#default_value' => variable_get('yamoney_api_kassa_tax_'.$tax['name'], 1),
                 );
@@ -187,10 +187,10 @@ function yamoney_api_admin_settings()
     if (module_exists('uc_taxes')) {
         $form['yamoney_api_kassa_tab']['yamoney_api_send_check'] = array(
             '#type'          => 'radios',
-            '#title'         => t('Отправлять в Яндекс.Кассу данные для чеков (54-ФЗ)'),
+            '#title'         => t('Transmit details for receipts to Yandex.Checkout (Federal Law No. 54-FZ)'),
             '#options'       => array(
-                '1' => t('Включить'),
-                '0' => t('Выключить'),
+                '1' => t('Enable'),
+                '0' => t('Disable'),
             ),
             '#default_value' => variable_get('yamoney_api_send_check', '0'),
         );
@@ -206,10 +206,10 @@ function yamoney_api_admin_settings()
                 '#markup' => '<div>',
             );
             $form['yamoney_api_kassa_tab']['lbl_shop_tax']          = array(
-                '#markup' => t('<div style="float: left;width: 200px;">Ставка в вашем магазине.</div>'),
+                '#markup' => '<div style="float: left;width: 200px;">'.t('Rate at your store').'</div>',
             );
             $form['yamoney_api_kassa_tab']['lbl_kassa_tax']         = array(
-                '#markup' => t('<div>Ставка для чека в налоговую.</div>'),
+                '#markup' => '<div>'.t('Rate for the receipt sent to the tax service').'</div>',
             );
             $form['yamoney_api_kassa_tab']['lbl_wrapper_tax_end']   = array(
                 '#markup' => '</div>',
@@ -225,12 +225,12 @@ function yamoney_api_admin_settings()
                     '#type'          => 'select',
                     '#label'         => false,
                     '#options'       => array(
-                        1 => t('Без НДС'),
+                        1 => t('Without VAT'),
                         2 => t('0%'),
                         3 => t('10%'),
                         4 => t('18%'),
-                        5 => t('Расчётная ставка 10/110'),
-                        6 => t('Расчётная ставка 18/118'),
+                        5 => t('Applicable rate 10/110'),
+                        6 => t('Applicable rate 18/118'),
                     ),
                     '#default_value' => variable_get('yamoney_api_kassa_tax_'.$tax->id, 1),
                     '#description'   => '',
@@ -247,9 +247,9 @@ function yamoney_api_admin_settings()
     if (module_exists('commerce')) {
         $form['yamoney_api_kassa_tab']['notifyUrl'] = array(
             '#type'          => 'textfield',
-            '#title'         => t('Url для уведомлений'),
+            '#title'         => t('Address for notifications'),
             '#attributes'    => array('disabled' => 'disabled'),
-            '#description'   => t('Этот адрес понадобится, только если его попросят специалисты Яндекс.Кассы'),
+            '#description'   => t('Only required if Yandex.Checkout\'s specialists ask for it'),
             '#default_value' => url('yamoney_api/commerce/notify', array('absolute' => true)),
         );
     }
@@ -257,24 +257,24 @@ function yamoney_api_admin_settings()
     if (module_exists('uc_payment')) {
         $form['yamoney_api_kassa_tab']['notifyUrl'] = array(
             '#type'          => 'textfield',
-            '#title'         => t('Url для уведомлений'),
+            '#title'         => t('Address for notifications'),
             '#attributes'    => array('disabled' => 'disabled'),
-            '#description'   => t('Этот адрес понадобится, только если его попросят специалисты Яндекс.Кассы'),
+            '#description'   => t('Only required if Yandex.Checkout\'s specialists ask for it'),
             '#default_value' => url('yamoney_api/ubercart/notify', array('absolute' => true)),
         );
     }
 
     $form['yamoney_api_kassa_tab']['yamoney_api_debug'] = array(
         '#type'          => 'checkbox',
-        '#title'         => t('Запись отладочной информации'),
-        '#description'   => t('Настройку нужно будет поменять, только если попросят специалисты Яндекс.Денег'),
+        '#title'         => t('Record of debugging information'),
+        '#description'   => t('Only required if Yandex.Checkout\'s specialists ask for it'),
         '#attributes'    => array('id' => 'kassa-checkbox'),
         '#default_value' => variable_get('yamoney_api_debug', 0),
     );
 
     if (variable_get('yamoney_api_debug')) {
         $form['yamoney_api_kassa_tab']['my_button']['#type']                     = 'button';
-        $form['yamoney_api_kassa_tab']['my_button']['#value']                    = t('Скачать лог');
+        $form['yamoney_api_kassa_tab']['my_button']['#value']                    = t('Download the log');
         $form['yamoney_api_kassa_tab']['my_button']['#submit']                   = array('yamoney_api_log_handler');
         $form['yamoney_api_kassa_tab']['my_button']['#executes_submit_callback'] = true;
     }
@@ -287,14 +287,12 @@ function yamoney_api_admin_settings()
         '#weight' => 30,
     );
     $form['yamoney_api_p2p_tab']['intro']                   = array(
-        '#markup' => t(
-            'Для работы с модулем нужно <a href="https://money.yandex.ru/new" target="_blank">открыть кошелек</a> на Яндексе и <a href="https://sp-money.yandex.ru/myservices/online.xml" target="_blank">зарегистрировать приложение</a> на сайте Яндекс.Денег'
-        ),
+        '#markup' => t('To start operating the module, you need to <a href="https://money.yandex.ru/new" target="_blank">start a Yandex.Money wallet</a> and <a href="https://sp-money.yandex.ru/myservices/online.xml" target="_blank">register the app</a> at the Yandex.Money website'),
     );
     $form['yamoney_api_p2p_tab']['yamoney_api_p2p']         = array(
         '#type'          => 'checkbox',
         '#attributes'    => array('id' => 'p2p-checkbox'),
-        '#title'         => t('Включить прием платежей в кошелек на Яндексе'),
+        '#title'         => t('Enable payment acceptance to the Yandex.Money Wallet'),
         '#default_value' => variable_get('yamoney_api_p2p', 0),
     );
     $form['yamoney_api_p2p_tab']['lbl_redirectUrl']         = array(
@@ -303,31 +301,31 @@ function yamoney_api_admin_settings()
         '#attributes'    => array('disabled' => 'disabled'),
         '#default_value' => url('yamoney/check_wallet', array('absolute' => true)),
         '#description'   => t(
-            "Скопируйте эту ссылку в верхнее поле на <a href='https://sp-money.yandex.ru/myservices/online.xml' target='_blank'>странице HTTP-уведомлений</a>"
+            "Copy this link to the upper field at the <a href='https://sp-money.yandex.ru/myservices/online.xml' target='_blank'>HTTP notifications page</a>"
         ),
     );
     $form['yamoney_api_p2p_tab']['lbl_setting']             = array(
-        '#markup' => t('<h3>Настройки приема платежей</h3>'),
+        '#markup' => t('<h3>Payment acceptance settings</h3>'),
     );
     $form['yamoney_api_p2p_tab']['yamoney_api_receiver']    = array(
         '#type'          => 'textfield',
-        '#title'         => t('Purse number'),
-        '#description'   => t('Your Yandex.Money purse number.'),
+        '#title'         => t('Wallet number'),
+        '#description'   => t('Your Yandex.Money wallet number.'),
         '#default_value' => variable_get('yamoney_api_receiver', ''),
         '#size'          => 14,
         //'#states' => $p2p_states,
     );
     $form['yamoney_api_p2p_tab']['yamoney_secret']          = array(
         '#type'          => 'textfield',
-        '#title'         => t('Секретное слово'),
-        '#description'   => t('Секретное слово'),
+        '#title'         => t("Codeword"),
+        '#description'   => t("Codeword"),
         '#default_value' => variable_get('yamoney_secret', ''),
         '#size'          => 17,
     );
     $form['yamoney_api_p2p_tab']['yamoney_api_formcomment'] = array(
         '#type'          => 'textfield',
-        '#title'         => t('Pay comment'),
-        '#description'   => t('Это название увидит пользователь'),
+        '#title'         => t("Payment comment"),
+        '#description'   => t('This title will be shown to the customer'),
         '#default_value' => variable_get('yamoney_api_formcomment', $base_url),
         //'#states' => $p2p_states,
     );
@@ -393,7 +391,7 @@ function yamoney_api_admin_settings()
         '#type'          => 'textfield',
         '#title'         => t('Payment purpose'),
         '#description'   => t(
-            'Payment purpose is added to the payment order: specify whatever will help identify the order paid via Yandex.Billing'
+            'Purpose of payment is added to the payment order: specify whatever will help identify the order paid via Yandex.Billing'
         ),
         '#default_value' => variable_get(
             'yamoney_api_billing_narrative',
@@ -417,7 +415,7 @@ function yamoney_api_admin_settings_validate($form, &$form_state)
         $form_state['values']['yamoney_api_shop'] = 1;
         $form_state['values']['yamoney_api_p2p']  = 0;
         drupal_set_message(
-            'Невозможно одновременно включить оплату через Яндекс.Деньги и Яндекс.Кассу',
+            t('Невозможно одновременно включить оплату через Яндекс.Деньги и Яндекс.Кассу'),
             'warning'
         );
         form_set_error('yamoney_api_shop');
@@ -428,7 +426,7 @@ function yamoney_api_admin_settings_validate($form, &$form_state)
         $form_state['values']['yamoney_api_shop']           = 1;
         $form_state['values']['yamoney_api_billing_enable'] = 0;
         drupal_set_message(
-            'Невозможно одновременно включить оплату через Яндекс.Платежку и Яндекс.Кассу',
+            t('Unable to activate payments via Yandex.Billing and Yandex.Checkout at the same time'),
             'warning'
         );
         form_set_error('yamoney_api_shop');
@@ -439,7 +437,7 @@ function yamoney_api_admin_settings_validate($form, &$form_state)
         $form_state['values']['yamoney_api_p2p']            = 1;
         $form_state['values']['yamoney_api_billing_enable'] = 0;
         drupal_set_message(
-            'Невозможно одновременно включить оплату через Яндекс.Деньги и Яндекс.Кассу',
+            t('Невозможно одновременно включить оплату через Яндекс.Деньги и Яндекс.Кассу'),
             'warning'
         );
         form_set_error('yamoney_api_p2p');
@@ -460,9 +458,7 @@ function yamoney_api_admin_settings_validate($form, &$form_state)
         if (!preg_match('/^\d+$/i', $form_state['values']['yamoney_api_shop_id'])) {
             form_set_error(
                 'yamoney_api_shop_id',
-                ' Такого shopId нет. Пожалуйста, скопируйте параметр в 
-                <a href="https://money.yandex.ru/joinups">личном кабинете Яндекс.Кассы</a>
-                (наверху любой страницы)'
+                t('Such shopId does not exist. Please copy this parameter under your <a href=\"https://money.yandex.ru/joinups\">Yandex.Checkout\'s Merchant Profile</a> (at the top of any page)')
             );
             $valid = false;
         }
@@ -470,9 +466,7 @@ function yamoney_api_admin_settings_validate($form, &$form_state)
         if (!preg_match('/^test_.*|live_.*$/i', $form_state['values']['yamoney_api_secret'])) {
             form_set_error(
                 'yamoney_api_secret',
-                ' Такого секретного ключа нет. Если вы уверены, что скопировали ключ правильно, значит, он по какой-то причине не работает.
-                  Выпустите и активируйте ключ заново — 
-                  <a href="https://money.yandex.ru/joinups">в личном кабинете Яндекс.Кассы</a>'
+                t('Such secret key does not exist. If you are sure you copied the key correctly, this means it does not work for some reason. Issue and activate the key again—under your <a href=\"https://money.yandex.ru/joinups\">Merchant Profile</a>')
             );
             $valid = false;
         }
@@ -482,8 +476,8 @@ function yamoney_api_admin_settings_validate($form, &$form_state)
             $password = $form_state['values']['yamoney_api_secret'];
             if (!yamoney_api_admin_settings_test_connection($shopId, $password)) {
                 drupal_set_message(
-                    'Проверьте shopId и Секретный ключ — где-то есть ошибка. А лучше скопируйте их прямо из'
-                        . ' <a href="https://kassa.yandex.ru/my" target="_blank">личного кабинета Яндекс.Кассы</a>',
+                    t('Проверьте shopId и Секретный ключ — где-то есть ошибка. А лучше скопируйте их прямо из'
+                        . ' <a href="https://kassa.yandex.ru/my" target="_blank">личного кабинета Яндекс.Кассы</a>'),
                     'warning'
                 );
                 form_set_error('yamoney_api_shop_id', '');
@@ -496,21 +490,21 @@ function yamoney_api_admin_settings_validate($form, &$form_state)
         if (empty($form_state['values']['yamoney_api_receiver'])) {
             form_set_error(
                 'yamoney_api_receiver',
-                'Заполните поле Номер кошелька'
+                t('Wallet number field is missing')
             );
         }
 
         if (empty($form_state['values']['yamoney_secret'])) {
             form_set_error(
                 'yamoney_secret',
-                'Заполните поле Секретное слово'
+                t('Codeword field is missing')
             );
         }
 
         if (empty($form_state['values']['yamoney_api_formcomment'])) {
             form_set_error(
                 'yamoney_api_formcomment',
-                'Заполните поле Комментарий платежа'
+                t('Payment comment field is missing')
             );
         }
 
@@ -520,36 +514,15 @@ function yamoney_api_admin_settings_validate($form, &$form_state)
         if (empty($form_state['values']['yamoney_api_billing_id'])) {
             form_set_error(
                 'yamoney_api_billing_id',
-                'Заполните поле Идентификатор платежки'
+                t('Payment ID field is missing')
             );
         }
 
         if (empty($form_state['values']['yamoney_api_billing_narrative'])) {
             form_set_error(
                 'yamoney_api_billing_narrative',
-                'Заполните поле Назначение платежа'
+                t('Purpose of payment field is missing')
             );
-        }
-    }
-
-    if ($form_state['values']['yamoney_api_ip']) {
-        $ips = explode("\n", $form_state['values']['yamoney_api_ip']);
-        foreach ($ips as $ip) {
-            $ip = trim($ip);
-            if (empty($ip)) {
-                continue;
-            }
-            if (!filter_var($ip, FILTER_VALIDATE_IP)) {
-                form_set_error(
-                    'yamoney_api_ip',
-                    t(
-                        'IP is not correct: %ip.<br/>Please insert correct server IP or insert 0.0.0.0 to default!',
-                        array(
-                            '%ip' => $ip,
-                        )
-                    )
-                );
-            }
         }
     }
 }
@@ -601,7 +574,7 @@ function send_statistics($form, &$form_state)
     $form_data   = $form_state['input'];
     $array       = array(
         'url'      => $base_url,
-        'cms'      => 'drupal',
+        'cms'      => 'api-drupal',
         'version'  => VERSION,
         'ver_mod'  => $info['version'],
         'yacms'    => false,

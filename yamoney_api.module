@@ -15,7 +15,7 @@ define('YAMONEY_API_CHECK_RESULT_CODE_ERROR_MD5', 1);
 define('YAMONEY_API_CHECK_RESULT_CODE_ERROR_CUSTOM', 100);
 define('YAMONEY_API_CHECK_RESULT_CODE_ERROR_REQUEST', 200);
 define('YAMONEY_API_DEFAULT_TAX_RATE_ID', 1);
-define('YAMONEY_MODULE_VERSION', '1.0.3');
+define('YAMONEY_MODULE_VERSION', '1.0.5');
 define('YAMONEY_API_DEFAULT_PAYMENT_METHOD', \YaMoney\Model\PaymentMethodType::BANK_CARD);
 define('QUICK_API_PAY_VERSION', 2);
 
@@ -289,7 +289,7 @@ function yamoney_api_commerce_return_page()
                                 if ($captureResult->getStatus() == PaymentStatus::SUCCEEDED) {
                                     commerce_order_status_update($order, 'completed');
                                     YandexMoneyLogger::info(
-                                        'Payment succseded. Redirect: '.url(
+                                        'Payment succeeded. Redirect: '.url(
                                             'yamoney_api/success',
                                             array('absolute' => true)
                                         )

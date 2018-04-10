@@ -26,9 +26,9 @@ function ya_commerce_api_commerce_payment_method_info()
 
     $display_title = '';
     if (variable_get('yamoney_api_shop', 0)) {
-        $display_title = t('Яндекс.Касса (банковские карты, электронные деньги и другое)');
+        $display_title = t('Yandex.Checkout (bank card, e-money, etc.)');
     } else if (variable_get('yamoney_api_p2p', 0)) {
-        $display_title = t('Яндекс.Деньги (банковские карты, кошелек)');
+        $display_title = t('Yandex.Money (bank card, e-wallet)');
     } else if (variable_get('yamoney_api_billing_enable', 0)) {
         $display_title = t('Yandex.Billing (bank card, e-wallets)');
     }
@@ -204,7 +204,7 @@ function ya_commerce_api_submit_form_validate(
             if (isset($_POST['alfabank_login']) && $_POST['alfabank_login'] !== '') {
                 return true;
             } else {
-                drupal_set_message('Поле логин в Альфа клике заполнено неверно', 'error');
+                drupal_set_message(t('The login in Alfa-Click field is filled incorrectly.'), 'error');
 
                 return false;
             }
@@ -215,7 +215,7 @@ function ya_commerce_api_submit_form_validate(
                 if ($phone && preg_match('/^[0-9]{4,15}$/', $phone)) {
                     return true;
                 } else {
-                    drupal_set_message('Поле телефон заполнено неверно.', 'error');
+                    drupal_set_message(t("The phone number field is filled incorrectly."), 'error');
 
                     return false;
                 }
@@ -230,7 +230,7 @@ function ya_commerce_api_submit_form_validate(
             if ($customerName
                 && count($parts) != 3
             ) {
-                form_set_error('customer_name', 'Ф.И.О. плательщика введено не верно.');
+                form_set_error('customer_name', t('Payer\'s name is entered incorrectly.'));
 
                 return false;
             }
@@ -283,7 +283,7 @@ function ya_commerce_api_submit_form_submit($payment_method, $pane_form, $pane_v
                 $tries++;
                 if ($tries > 3) {
                     YandexMoneyLogger::info('Maximum create payment tries reached. Order id - '.$order->order_number);
-                    drupal_set_message('Неудалось создать платеж.', 'error');
+                    drupal_set_message(t('Unable to create payment.'), 'error');
                     break;
                 }
             } while ($response == null);
@@ -303,13 +303,13 @@ function ya_commerce_api_submit_form_submit($payment_method, $pane_form, $pane_v
                     }
                 } else {
                     YandexMoneyLogger::error('Payment not created. Order id: '.$order->order_number);
-                    drupal_set_message('Неудалось создать платеж.', 'error');
+                    drupal_set_message(t('Unable to create payment.'), 'error');
                 }
             }
 
         } catch (ApiException $e) {
             YandexMoneyLogger::error('Api error: '.$e->getMessage());
-            drupal_set_message('Не удалось заплатить этим методом.', 'error');
+            drupal_set_message(t('Unable to pay with this method.'), 'error');
             drupal_goto(request_uri());
         }
     }
@@ -333,7 +333,7 @@ function getBuilder($order, $amount, $paymentMethod, $order_wrapper)
         try {
             $paymentMethod->setLogin($_POST['alfabank_login']);
         } catch (Exception $e) {
-            drupal_set_message('Поле логин заполнено неверно.', 'error');
+            drupal_set_message(t('The login field is filled incorrectly.'), 'error');
         }
     } elseif ($paymentMethod == 'qiwi') {
         $paymentMethod = new \YaMoney\Model\PaymentData\PaymentDataQiwi();
@@ -341,7 +341,7 @@ function getBuilder($order, $amount, $paymentMethod, $order_wrapper)
             $phone = preg_replace('/[^\d]/', '', $_POST['qiwi_phone']);
             $paymentMethod->setPhone($phone);
         } catch (Exception $e) {
-            drupal_set_message('Поле телефон заполнено неверно.', 'error');
+            drupal_set_message(t("The phone number field is filled incorrectly."), 'error');
         }
     }
     YandexMoneyLogger::info('Return url: '.ya_commerce_api_get_return_url($order));
@@ -556,7 +556,7 @@ function ya_commerce_api_yamoney_api_process_payment_alter(&$payment)
         $payment['success'] = true;
     } else {
         $payment['success'] = false;
-        $payment['error']   = 'Can not find order with id '.$transaction->order_id;
+        $payment['error']   = t('Can not find order with id ').$transaction->order_id;
     }
 }
 
@@ -689,12 +689,12 @@ function theme_ya_commerce_api_form_radio_element_external($variables)
 
     if ($element['#value'] == 'alfabank') {
         $output .= '<div>';
-        $output .= '<div>Укажите логин, и мы выставим счет в Альфа-Клике. После этого останется подтвердить платеж на сайте интернет-банка.</div>';
+        $output .= '<div>' . t('Specify the login, and we\'ll send the bill in Alfa-Click. All you have do after that is confirm the payment online at the bank\'s website.'). '</div>';
         $output .= '<input type="text" name="alfabank_login">';
         $output .= '</div>';
     } elseif ($element['#value'] == 'qiwi') {
         $output .= '<div>';
-        $output .= '<div>Телефон, который привязан к Qiwi Wallet</div>';
+        $output .= '<div>'.  t('Phone number linked to Qiwi Wallet').'</div>';
         $output .= '<input type="text" name="qiwi_phone">';
         $output .= '</div>';
     }
