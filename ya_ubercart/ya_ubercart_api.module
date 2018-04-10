@@ -26,9 +26,9 @@ function ya_ubercart_api_uc_payment_method()
 
     $display_title = '';
     if (variable_get('yamoney_api_shop', 0)) {
-        $display_title = t('Яндекс.Касса (банковские карты, электронные деньги и другое)');
+        $display_title = t('Yandex.Checkout (bank card, e-money, etc.)');
     } else if (variable_get('yamoney_api_p2p', 0)) {
-        $display_title = t('Яндекс.Деньги (банковские карты, кошелек)');
+        $display_title = t('Yandex.Money (bank card, e-wallet)');
     } else if (variable_get('yamoney_api_billing_enable', 0)) {
         $display_title = t('Yandex.Billing (bank card, e-wallets)');
     }
@@ -149,7 +149,7 @@ function ya_ubercart_api_form($form, &$form_state, $order)
             }
         } catch (ApiException $e) {
             YandexMoneyLogger::error('Api error: '.$e->getMessage());
-            drupal_set_message('Не удалось заплатить этим методом.', 'error');
+            drupal_set_message('Unable to pay with this method.', 'error');
         }
     } else {
 
@@ -201,14 +201,14 @@ function getBuilder($order, $amount, $paymentMethod)
         try {
             $paymentMethod->setLogin($_SESSION['alfabank_login']);
         } catch (Exception $e) {
-            drupal_set_message('Поле логин заполнено неверно.', 'error');
+            drupal_set_message(t('The login field is filled incorrectly.'), 'error');
         }
     } elseif ($paymentMethod == 'qiwi') {
         $paymentMethod = new \YaMoney\Model\PaymentData\PaymentDataQiwi();
         try {
             $paymentMethod->setPhone($_SESSION['qiwi_phone']);
         } catch (Exception $e) {
-            drupal_set_message('Поле телефон заполнено неверно.', 'error');
+            drupal_set_message(t('The phone number field is filled incorrectly.'), 'error');
         }
     }
 
@@ -369,7 +369,7 @@ function uc_payment_method_ya_ubercart_api($op, &$order, $form = array(), &$form
                 if ($customerName
                     && count($parts) != 3
                 ) {
-                    form_set_error('customer_name', 'Ф.И.О. плательщика введено не верно.');
+                    form_set_error('customer_name', t('Payer\'s name is entered incorrectly.'));
                 }
             }
 
@@ -513,12 +513,12 @@ function theme_ya_ubercart_api_form_radio_element_external($variables)
 
     if ($element['#value'] == 'alfabank') {
         $output .= '<div>';
-        $output .= '<div>Укажите логин, и мы выставим счет в Альфа-Клике. После этого останется подтвердить платеж на сайте интернет-банка.</div>';
+        $output .= '<div>'. t('Specify the login, and we\'ll send the bill in Alfa-Click. All you have do after that is confirm the payment online at the bank\'s website.').'</div>';
         $output .= '<input type="text" name="alfabank_login">';
         $output .= '</div>';
     } elseif ($element['#value'] == 'qiwi') {
         $output .= '<div>';
-        $output .= '<div>Телефон, который привязан к Qiwi Wallet</div>';
+        $output .= '<div>'.t('Phone number linked to Qiwi Wallet').'</div>';
         $output .= '<input type="text" name="qiwi_phone">';
         $output .= '</div>';
     }
