@@ -1,22 +1,23 @@
 <?php
-use YaMoney\Client\YandexMoneyApi;
-use YaMoney\Common\Exceptions\ApiException;
-use YaMoney\Common\Exceptions\NotFoundException;
-use YaMoney\Model\Notification\NotificationWaitingForCapture;
-use YaMoney\Model\PaymentStatus;
-use YaMoney\Request\Payments\Payment\CreateCaptureRequest;
+use YandexCheckout\Client;
+use YandexCheckout\Common\Exceptions\ApiException;
+use YandexCheckout\Model\Notification\NotificationSucceeded;
+use YandexCheckout\Model\Notification\NotificationWaitingForCapture;
+use YandexCheckout\Model\NotificationEventType;
+use YandexCheckout\Model\PaymentStatus;
+use YandexCheckout\Request\Payments\Payment\CreateCaptureRequest;
 
 $modulePath = drupal_get_path('module', 'yamoney_api');
-require_once $modulePath.'/YandexMoneyLogger.php';
-require_once $modulePath.DIRECTORY_SEPARATOR.'vendor'.DIRECTORY_SEPARATOR.'autoload.php';
+require_once $modulePath.DIRECTORY_SEPARATOR.'YandexMoneyLogger.php';
+require_once $modulePath.DIRECTORY_SEPARATOR.'yandex-checkout-sdk-php'.DIRECTORY_SEPARATOR.'autoload.php';
 
 define('YAMONEY_API_CHECK_RESULT_CODE_SUCCESS', 0);
 define('YAMONEY_API_CHECK_RESULT_CODE_ERROR_MD5', 1);
 define('YAMONEY_API_CHECK_RESULT_CODE_ERROR_CUSTOM', 100);
 define('YAMONEY_API_CHECK_RESULT_CODE_ERROR_REQUEST', 200);
 define('YAMONEY_API_DEFAULT_TAX_RATE_ID', 1);
-define('YAMONEY_MODULE_VERSION', '1.0.5');
-define('YAMONEY_API_DEFAULT_PAYMENT_METHOD', \YaMoney\Model\PaymentMethodType::BANK_CARD);
+define('YAMONEY_MODULE_VERSION', '1.0.6');
+define('YAMONEY_API_DEFAULT_PAYMENT_METHOD', \YandexCheckout\Model\PaymentMethodType::BANK_CARD);
 define('QUICK_API_PAY_VERSION', 2);
 
 /**
@@ -149,409 +150,319 @@ function yamoney_api_menu()
 
 function yamoney_api_ubercart_return_page()
 {
-    YandexMoneyLogger::info('Return url init');
+    YandexMoneyLogger::info('Return url init ubercart');
+    $failUrl = 'yamoney_api/fail';
+    $successUrl = 'yamoney_api/success';
+
     $params = drupal_get_query_parameters();
-    if (isset($params['orderId'])) {
-        $order       = uc_order_load($params['orderId']);
-        $transaction = yamoney_api_transaction_load_by_order($order->order_id);
+    if (!isset($params['orderId'])) {
+        YandexMoneyLogger::info('Payment failed. Empty params orderId');
+        drupal_goto($failUrl);
+    }
 
-        if ($transaction) {
-            $shopId       = variable_get('yamoney_api_shop_id');
-            $shopPassword = variable_get('yamoney_api_secret');
-            $apiClient    = new YandexMoneyApi();
-            $apiClient->setAuth($shopId, $shopPassword);
-            $apiClient->setLogger(new YandexMoneyLogger());
+    $order = uc_order_load($params['orderId']);
+    if (!$order) {
+        YandexMoneyLogger::info('Payment failed. Can not load oder id #' . $params['orderId']);
+        drupal_goto($failUrl);
+    }
+    YandexMoneyLogger::info('Order: ' . json_encode($order));
 
-            $paymentId = $transaction->payment_id;
+    $transaction = yamoney_api_transaction_load_by_order($order->order_id);
+    if (!$transaction) {
+        YandexMoneyLogger::info('Payment failed. Transaction not found for order id #' . $params['orderId']);
+        drupal_goto($failUrl);
+    }
+    YandexMoneyLogger::info('Transaction: ' . json_encode($transaction));
 
-            try {
-                $result                     = $apiClient->getPaymentInfo($paymentId);
-                $transaction->remote_status = $result->status;
+    $shopId = variable_get('yamoney_api_shop_id');
+    $shopPassword = variable_get('yamoney_api_secret');
+    $apiClient = new Client();
+    $apiClient->setAuth($shopId, $shopPassword);
+    $apiClient->setLogger(new YandexMoneyLogger());
 
-                if ($result->status == PaymentStatus::SUCCEEDED) {
-                    uc_order_update_status($order->order_id, 'completed');
-                    uc_cart_complete_sale($order);
-                    uc_cart_empty($order->uid);
-                } elseif ($result->status == PaymentStatus::PENDING) {
-                    uc_order_update_status($order->order_id, 'pending');
-                    drupal_goto('yamoney_api/fail');
-                } elseif ($result->status == PaymentStatus::WAITING_FOR_CAPTURE) {
-                    uc_order_update_status($order->order_id, 'processing');
-                    $tries = 0;
+    $paymentId = $transaction->payment_id;
 
-                    $captureRequest = CreateCaptureRequest::builder()->setAmount($result->getAmount())->build();
-                    do {
-                        $result = $apiClient->capturePayment(
-                            $captureRequest,
-                            $paymentId,
-                            $order->order_id."_".microtime()
-                        );
-                        if ($result === null) {
-                            $tries++;
-                            if ($tries > 3) {
-                                break;
-                            }
-                            sleep(2);
-                        } else {
-
-                        }
-                    } while ($result === null);
-                    if ($result->status == PaymentStatus::SUCCEEDED) {
-                        uc_order_update_status($order->order_id, 'completed');
-                        uc_cart_complete_sale($order);
-                        uc_cart_empty($order->uid);
-                        drupal_goto('yamoney_api/success');
-                    } else {
-                        drupal_goto('yamoney_api/fail');
-                    }
-                } elseif ($result->status == PaymentStatus::CANCELED) {
-                    uc_order_update_status($order->order_id, 'canceled');
-                    drupal_goto('yamoney_api/fail');
-                }
-
-            } catch (ApiException $e) {
-                throw $e;
-            }
+    try {
+        $paymentResult = $apiClient->getPaymentInfo($paymentId);
+        if (!$paymentResult) {
+            YandexMoneyLogger::info('Payment failed. Empty payment info. PaymentId #' . $paymentId);
+            drupal_goto($failUrl);
         }
+        $transaction->remote_status = $paymentResult->status;
+
+        if ($paymentResult->getStatus() === PaymentStatus::WAITING_FOR_CAPTURE) {
+            uc_order_update_status($order->order_id, 'processing');
+            $captureRequest = CreateCaptureRequest::builder()->setAmount($paymentResult->getAmount())->build();
+            $paymentResult = $apiClient->capturePayment($captureRequest, $paymentId);
+            if (!$paymentResult) {
+                YandexMoneyLogger::info('Payment failed. Empty payment info. PaymentId #' . $paymentId);
+                drupal_goto($failUrl);
+            }
+            $transaction->remote_status = $paymentResult->getStatus();
+        }
+
+        if ($paymentResult->getStatus() === PaymentStatus::SUCCEEDED) {
+            YandexMoneyLogger::info('Payment succeeded. Redirect: ' . url($successUrl, array('absolute' => true)));
+            uc_order_update_status($order->order_id, 'completed');
+            uc_cart_complete_sale($order);
+            uc_cart_empty($order->uid);
+            drupal_goto($successUrl);
+        } elseif (($paymentResult->getStatus() === PaymentStatus::PENDING) && $paymentResult->getPaid()) {
+            YandexMoneyLogger::info('Payment pending and paid. Redirect: ' . url($successUrl,
+                    array('absolute' => true)));
+            uc_order_update_status($order->order_id, 'pending');
+            drupal_goto($successUrl);
+        } elseif ($paymentResult->status === PaymentStatus::CANCELED) {
+            YandexMoneyLogger::info('Payment canceled. Redirect: ' . url($failUrl, array('absolute' => true)));
+            uc_order_update_status($order->order_id, 'canceled');
+            drupal_goto($failUrl);
+        } else {
+            YandexMoneyLogger::info('Payment canceled. Redirect: ' . url($failUrl, array('absolute' => true)));
+            drupal_goto($failUrl);
+        }
+    } catch (ApiException $e) {
+        throw $e;
     }
 }
 
 function yamoney_api_commerce_return_page()
 {
     YandexMoneyLogger::info('Return url init');
+    $failUrl = 'yamoney_api/fail';
+    $successUrl = 'yamoney_api/success';
+
     $params = drupal_get_query_parameters();
-    if (isset($params['orderId'])) {
-        $order = commerce_order_load($params['orderId']);
-        if ($order) {
-            $transactions = commerce_payment_transaction_load_multiple(array(), array('order_id' => $order->order_id));
-            $transaction  = !empty($transactions) ? array_shift($transactions) : null;
+    if (!isset($params['orderId'])) {
+        YandexMoneyLogger::info('Payment failed. Empty params orderId');
+        drupal_goto($failUrl);
+    }
+    $order = commerce_order_load($params['orderId']);
+    if (!$order) {
+        YandexMoneyLogger::info('Payment failed. Can not load oder id #' . $params['orderId']);
+        drupal_goto($failUrl);
+    }
+    $transactions = commerce_payment_transaction_load_multiple(array(), array('order_id' => $order->order_id));
+    $transaction  = !empty($transactions) ? array_shift($transactions) : null;
 
-            if ($transaction) {
-                $shopId       = variable_get('yamoney_api_shop_id');
-                $shopPassword = variable_get('yamoney_api_secret');
-                $apiClient    = new YandexMoneyApi();
-                $apiClient->setLogger(new YandexMoneyLogger());
-                $apiClient->setAuth($shopId, $shopPassword);
+    if (!$transaction) {
+        YandexMoneyLogger::info('Payment failed. Transaction not found for order id #' . $params['orderId']);
+        drupal_goto($failUrl);
+    }
+    $shopId       = variable_get('yamoney_api_shop_id');
+    $shopPassword = variable_get('yamoney_api_secret');
+    $apiClient    = new Client();
+    $apiClient->setLogger(new YandexMoneyLogger());
+    $apiClient->setAuth($shopId, $shopPassword);
 
-                $paymentId = $transaction->remote_id;
+    $paymentId = $transaction->remote_id;
 
-                try {
-                    $tries = 0;
-                    do {
-                        $paymentResult = $apiClient->getPaymentInfo($paymentId);
-                        if ($paymentResult === null) {
-                            $tries++;
-                            if ($tries > 3) {
-                                break;
-                            }
-                            sleep(2);
-                        }
-                    } while ($paymentResult === null);
-                    if ($paymentResult) {
-                        $transaction->remote_status = $paymentResult->status;
-
-                        $url = 'yamoney_api/fail';
-                        if ($paymentResult->status == PaymentStatus::SUCCEEDED) {
-                            commerce_order_status_update($order, 'completed');
-                            YandexMoneyLogger::info(
-                                'Payment succeded. Redirect: '.url('yamoney_api/success', array('absolute' => true))
-                            );
-                            $url = 'yamoney_api/success';
-                        } elseif ($paymentResult->status == PaymentStatus::PENDING) {
-                            commerce_order_status_update($order, 'pending');
-                            YandexMoneyLogger::info(
-                                'Payment pending. Redirect: '.url('yamoney_api/fail', array('absolute' => true))
-                            );
-                            $url = 'yamoney_api/fail';
-                        } elseif ($paymentResult->status == PaymentStatus::WAITING_FOR_CAPTURE) {
-                            commerce_order_status_update($order, 'processing');
-                            $tries = 0;
-
-                            $captureRequest = CreateCaptureRequest::builder()->setAmount(
-                                $paymentResult->getAmount()
-                            )->build();
-                            do {
-                                $captureResult = $apiClient->capturePayment(
-                                    $captureRequest,
-                                    $transaction->remote_id,
-                                    $order->order_id."_".$transaction->revision_id
-                                );
-                                if ($captureResult === null) {
-                                    $tries++;
-                                    if ($tries > 3) {
-                                        break;
-                                    }
-                                    sleep(2);
-                                }
-                            } while ($captureResult === null);
-                            if ($captureRequest) {
-                                $transaction->remote_status = $captureResult->getStatus();
-                                if ($captureResult->getStatus() == PaymentStatus::SUCCEEDED) {
-                                    commerce_order_status_update($order, 'completed');
-                                    YandexMoneyLogger::info(
-                                        'Payment succeeded. Redirect: '.url(
-                                            'yamoney_api/success',
-                                            array('absolute' => true)
-                                        )
-                                    );
-                                    $url = 'yamoney_api/success';
-                                } else {
-                                    YandexMoneyLogger::info(
-                                        'Payment canceled. Redirect: '.url(
-                                            'yamoney_api/fail',
-                                            array('absolute' => true)
-                                        )
-                                    );
-                                    $url = 'yamoney_api/fail';
-                                }
-                            }
-                        } elseif ($paymentResult->status == PaymentStatus::CANCELED) {
-                            YandexMoneyLogger::info(
-                                'Payment canceled. Redirect: '.url('yamoney_api/fail', array('absolute' => true))
-                            );
-                            commerce_order_status_update($order, 'checkout_payment');
-                            $url = 'yamoney_api/fail';
-                        }
-
-                        commerce_payment_transaction_save($transaction);
-                        drupal_goto($url);
-                    }
-
-                } catch (Exception $e) {
-                    YandexMoneyLogger::info(
-                        'Payment failed. Redirect: '.url('yamoney_api/fail', array('absolute' => true))
-                    );
-                    YandexMoneyLogger::error('Api error: '.$e->getMessage());
-                    drupal_goto('yamoney_api/fail');
-                }
-            }
+    try {
+        $paymentResult = $apiClient->getPaymentInfo($paymentId);
+        if (!$paymentResult) {
+            YandexMoneyLogger::info('Payment failed. Empty payment info. PaymentId #' . $paymentId);
+            drupal_goto($failUrl);
         }
+
+        $transaction->remote_status = $paymentResult->status;
+
+        if ($paymentResult->getStatus() === PaymentStatus::WAITING_FOR_CAPTURE) {
+            commerce_order_status_update($order, 'processing');
+
+            $captureRequest = CreateCaptureRequest::builder()->setAmount($paymentResult->getAmount())->build();
+            $paymentResult = $apiClient->capturePayment($captureRequest, $transaction->remote_id);
+
+            if (!$paymentResult) {
+                YandexMoneyLogger::info('Payment failed. Empty payment info. PaymentId #' . $paymentId);
+                drupal_goto($failUrl);
+            }
+            $transaction->remote_status = $paymentResult->getStatus();
+        }
+
+        $url = $failUrl;
+        if ($paymentResult->getStatus() === PaymentStatus::SUCCEEDED) {
+            commerce_order_status_update($order, 'completed');
+            YandexMoneyLogger::info('Payment succeeded. Redirect: ' . url($successUrl, array('absolute' => true)));
+            $url = $successUrl;
+        } elseif (($paymentResult->getStatus() === PaymentStatus::PENDING) && $paymentResult->getPaid()) {
+            YandexMoneyLogger::info('Payment pending and paid. Redirect: '.url($successUrl, array('absolute' => true)));
+            $url = $successUrl;
+        } elseif ($paymentResult->status == PaymentStatus::CANCELED) {
+            YandexMoneyLogger::info('Payment canceled. Redirect: '.url($failUrl, array('absolute' => true)));
+            commerce_order_status_update($order, 'checkout_payment');
+        } else {
+            YandexMoneyLogger::info('Payment canceled. Redirect: ' . url($failUrl, array('absolute' => true)));
+        }
+
+        commerce_payment_transaction_save($transaction);
+        drupal_goto($url);
+    } catch (Exception $e) {
+        YandexMoneyLogger::info('Payment failed. Redirect: '.url($failUrl, array('absolute' => true)));
+        YandexMoneyLogger::error('Api error: '.$e->getMessage());
+        drupal_goto($failUrl);
     }
 }
 
 function yamoney_api_ubercart_notify()
 {
-    if ($_SERVER['REQUEST_METHOD'] == "POST") {
-        $body           = @file_get_contents('php://input');
-        $callbackParams = json_decode($body, true);
-        if (!json_last_error()) {
-            $notificationModel = new NotificationWaitingForCapture($callbackParams);
-            $paymentResponce   = $notificationModel->getObject();
-            $paymentId         = $paymentResponce->getId();
-            if ($paymentId) {
-                $shopId       = variable_get('yamoney_shop_id');
-                $shopPassword = variable_get('yamoney_secret');
-                $apiClient    = new YandexMoneyApi();
-                $apiClient->setAuth($shopId, $shopPassword);
-                $apiClient->setLogger(new YandexMoneyLogger());
-
-                $transaction = yamoney_api_transaction_load_by_payment($paymentId);
-                if ($transaction) {
-                    $orderResult = uc_order_load($transaction->order_id);
-                    if ($orderResult && is_array($orderResult)) {
-                        $order = $orderResult[0];
-                    } else {
-                        $order = $orderResult;
-                    }
-                }
-
-                if (!$transaction || !$order) {
-                    header("HTTP/1.1 404 Not Found");
-                    header("Status: 404 Not Found");
-                    exit();
-                }
-
-                if ($transaction
-                    && $order
-                    && $order->order_status != uc_get_order_status_id('completed')
-                ) {
-                    $tries = 0;
-                    do {
-                        $paymentInfoResult = $apiClient->getPaymentInfo($paymentResponce->id);
-                        if ($paymentInfoResult === null) {
-                            $tries++;
-                            if ($tries > 3) {
-                                break;
-                            }
-                            sleep(2);
-                        }
-                    } while ($paymentInfoResult === null);
-
-                    if ($paymentInfoResult) {
-                        switch ($paymentInfoResult->status) {
-                            case PaymentStatus::WAITING_FOR_CAPTURE:
-                                $captureRequest = CreateCaptureRequest::builder()->setAmount(
-                                    $paymentInfoResult->getAmount()
-                                )->build();
-
-                                $tries = 0;
-                                do {
-                                    $capturePaymentResult = $apiClient->capturePayment(
-                                        $captureRequest,
-                                        $paymentInfoResult->getId(),
-                                        $paymentInfoResult->getId()
-                                    );
-                                    if ($capturePaymentResult === null) {
-                                        $tries++;
-                                        if ($tries > 3) {
-                                            YandexMoneyLogger::info('Maximum  capture tries reached.');
-                                            break;
-                                        }
-                                        sleep(2);
-                                    } else {
-                                        if ($capturePaymentResult->status == PaymentStatus::SUCCEEDED) {
-                                            uc_order_update_status($order->order_id, 'completed');
-                                            YandexMoneyLogger::info('Order status completed');
-                                        } else {
-                                            YandexMoneyLogger::info('Order status canceled');
-                                            uc_order_update_status($order->order_id, 'canceled');
-                                        }
-                                        header("HTTP/1.1 200 OK");
-                                        header("Status: 200 OK");
-                                    }
-                                } while ($capturePaymentResult === null);
-
-                                break;
-                            case PaymentStatus::SUCCEEDED:
-                                YandexMoneyLogger::info('Order status completed');
-                                uc_order_update_status($order->order_id, 'completed');
-                                header("HTTP/1.1 200 OK");
-                                header("Status: 200 OK");
-                                break;
-                            case PaymentStatus::CANCELED:
-                                YandexMoneyLogger::info('Order status canceled');
-                                uc_order_update_status($order->order_id, 'canceled');
-                                header("HTTP/1.1 200 OK");
-                                header("Status: 200 OK");
-                                break;
-                            case PaymentStatus::PENDING:
-                                header("HTTP/1.1 402 Payment Required");
-                                header("Status: 402 Payment Required");
-                                break;
-                        }
-                    }
-                } else {
-                    header("HTTP/1.1 200 OK");
-                    header("Status: 200 OK");
-                }
-            }
-        } else {
-            header("HTTP/1.1 400 Bad Request");
-            header("Status: 400 Bad Request");
-            exit();
-        }
+    YandexMoneyLogger::info('Return notification init ubercart');
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        exit();
     }
+    $paymentResponse = yamoney_api_common_get_payment_info_from_input();
+    $paymentId = $paymentResponse->getId();
+
+    $shopId = variable_get('yamoney_shop_id');
+    $shopPassword = variable_get('yamoney_secret');
+    $apiClient = new Client();
+    $apiClient->setAuth($shopId, $shopPassword);
+    $apiClient->setLogger(new YandexMoneyLogger());
+
+    $transaction = yamoney_api_transaction_load_by_payment($paymentId);
+    yamoney_api_common_check_value_is_not_empty($transaction, '404 Not Found', 'Transaction not found');
+    $orderResult = uc_order_load($transaction->order_id);
+    if ($orderResult && is_array($orderResult)) {
+        $order = $orderResult[0];
+    } else {
+        $order = $orderResult;
+    }
+    yamoney_api_common_check_value_is_not_empty($order, '404 Not Found', 'Order not found');
+    if ($order->order_status === uc_get_order_status_id('completed')) {
+        yamoney_api_common_exit_200();
+    }
+
+    $paymentInfoResult = $apiClient->getPaymentInfo($paymentResponse->getId());
+    yamoney_api_common_check_value_is_not_empty($paymentInfoResult, '400 Bad Request', 'Empty payment info');
+
+    if ($paymentInfoResult->getStatus() === PaymentStatus::WAITING_FOR_CAPTURE) {
+        $captureRequest = CreateCaptureRequest::builder()->setAmount($paymentInfoResult->getAmount())->build();
+        $paymentInfoResult = $apiClient->capturePayment($captureRequest, $paymentInfoResult->getId());
+        yamoney_api_common_check_value_is_not_empty($paymentInfoResult, '400 Bad Request', 'Empty payment info');
+    }
+
+    if ($paymentInfoResult->getStatus() === PaymentStatus::SUCCEEDED) {
+        YandexMoneyLogger::info('Order status completed');
+        uc_order_update_status($order->order_id, 'completed');
+    } elseif ($paymentInfoResult->getStatus() === PaymentStatus::CANCELED) {
+        YandexMoneyLogger::info('Order status canceled');
+        uc_order_update_status($order->order_id, 'canceled');
+    } else {
+        YandexMoneyLogger::error('Wrong payment status: ' . $paymentInfoResult->getStatus());
+        yamoney_api_common_exit_400();
+    }
+    yamoney_api_common_exit_200();
 
     exit();
 }
 
 function yamoney_api_commerce_notify()
 {
-    if ($_SERVER['REQUEST_METHOD'] == "POST") {
-        YandexMoneyLogger::info('Notification init');
-        $body           = @file_get_contents('php://input');
-        $callbackParams = json_decode($body, true);
-        if (!json_last_error()) {
-            $notificationModel = new NotificationWaitingForCapture($callbackParams);
-            $paymentResponce   = $notificationModel->getObject();
-
-            if ($paymentResponce->id) {
-                $shopId       = variable_get('yamoney_api_shop_id');
-                $shopPassword = variable_get('yamoney_api_secret');
-                $transactions = commerce_payment_transaction_load_multiple(
-                    array(),
-                    array('remote_id' => $paymentResponce->id)
-                );
-                $transaction  = !empty($transactions) ? array_shift($transactions) : null;
-                $order        = commerce_order_load($transaction->order_id);
-                if (!$order) {
-                    header("HTTP/1.1 404 Not Found");
-                    header("Status: 404 Not Found");
-                    exit();
-                }
-
-                $apiClient = new YandexMoneyApi();
-                $apiClient->setAuth($shopId, $shopPassword);
-                $apiClient->setLogger(new YandexMoneyLogger());
-
-                if ($order->status !== 'completed') {
-                    $tries = 0;
-                    do {
-                        $paymentInfoResult = $apiClient->getPaymentInfo($paymentResponce->id);
-                        if ($paymentInfoResult === null) {
-                            $tries++;
-                            if ($tries > 3) {
-                                YandexMoneyLogger::info('Maximum  capture tries reached.');
-                                break;
-                            }
-                            sleep(2);
-                        }
-                    } while ($paymentInfoResult === null);
-
-                    if ($paymentInfoResult) {
-                        switch ($paymentInfoResult->status) {
-                            case PaymentStatus::WAITING_FOR_CAPTURE:
-                                $captureRequest = CreateCaptureRequest::builder()->setAmount(
-                                    $paymentInfoResult->getAmount()
-                                )->build();
-
-                                $tries = 0;
-                                do {
-                                    $capturePaymentResult = $apiClient->capturePayment(
-                                        $captureRequest,
-                                        $paymentInfoResult->getId(),
-                                        $paymentInfoResult->getId()
-                                    );
-                                    if ($capturePaymentResult === null) {
-                                        $tries++;
-                                        if ($tries > 3) {
-                                            break;
-                                        }
-                                        sleep(2);
-                                    }
-                                } while ($capturePaymentResult === null);
-                                if ($capturePaymentResult) {
-                                    if ($capturePaymentResult->status == PaymentStatus::SUCCEEDED) {
-                                        commerce_order_status_update($order, 'completed');
-                                        YandexMoneyLogger::info('Order status completed');
-                                    } else {
-                                        YandexMoneyLogger::info('Order status canceled');
-                                        commerce_order_status_update($order, 'canceled');
-                                    }
-                                    header("HTTP/1.1 200 OK");
-                                    header("Status: 200 OK");
-                                }
-                                break;
-                            case PaymentStatus::SUCCEEDED:
-                                YandexMoneyLogger::info('Order status completed');
-                                commerce_order_status_update($order, 'completed');
-                                header("HTTP/1.1 200 OK");
-                                header("Status: 200 OK");
-                                break;
-                            case PaymentStatus::CANCELED:
-                                YandexMoneyLogger::info('Order status canceled');
-                                commerce_order_status_update($order, 'canceled');
-                                header("HTTP/1.1 200 OK");
-                                header("Status: 200 OK");
-                                break;
-                            case PaymentStatus::PENDING:
-                                header("HTTP/1.1 402 Payment Required");
-                                header("Status: 402 Payment Required");
-                                break;
-                        }
-                    }
-                } else {
-                    header("HTTP/1.1 200 OK");
-                    header("Status: 200 OK");
-                }
-            }
-        } else {
-            YandexMoneyLogger::info('Parse POST body failed');
-            header("HTTP/1.1 400 Bad Request");
-            header("Status: 400 Bad Request");
-            exit();
-        }
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        exit();
     }
+
+    $paymentResponse = yamoney_api_common_get_payment_info_from_input();
+
+    $shopId = variable_get('yamoney_api_shop_id');
+    $shopPassword = variable_get('yamoney_api_secret');
+    $transactions = commerce_payment_transaction_load_multiple(
+        array(),
+        array('remote_id' => $paymentResponse->id)
+    );
+    $transaction = !empty($transactions) ? array_shift($transactions) : null;
+    $order = commerce_order_load($transaction->order_id);
+    yamoney_api_common_check_value_is_not_empty($order, '404 Not Found', 'Order not found');
+
+    $apiClient = new Client();
+    $apiClient->setAuth($shopId, $shopPassword);
+    $apiClient->setLogger(new YandexMoneyLogger());
+
+    if ($order->status === 'completed') {
+        yamoney_api_common_exit_200();
+    }
+    $paymentInfoResult = $apiClient->getPaymentInfo($paymentResponse->id);
+    yamoney_api_common_check_value_is_not_empty($paymentInfoResult, '400 Bad Request', 'Empty payment info');
+
+    if ($paymentInfoResult->getStatus() === PaymentStatus::WAITING_FOR_CAPTURE) {
+        $captureRequest = CreateCaptureRequest::builder()->setAmount($paymentInfoResult->getAmount())->build();
+        $paymentInfoResult = $apiClient->capturePayment($captureRequest, $paymentInfoResult->getId());
+        yamoney_api_common_check_value_is_not_empty($paymentInfoResult, '400 Bad Request', 'Empty payment info');
+    }
+
+    if ($paymentInfoResult->getStatus() === PaymentStatus::SUCCEEDED) {
+        YandexMoneyLogger::info('Order status completed');
+        commerce_order_status_update($order, 'completed');
+    } elseif($paymentInfoResult->getStatus() === PaymentStatus::CANCELED) {
+        YandexMoneyLogger::info('Order status canceled');
+        commerce_order_status_update($order, 'canceled');
+    } else {
+        YandexMoneyLogger::error('Wrong payment status: ' . $paymentInfoResult->getStatus());
+        yamoney_api_common_exit_400();
+    }
+    yamoney_api_common_exit_200();
+}
+
+/**
+ * @return \YandexCheckout\Model\PaymentInterface
+ */
+function yamoney_api_common_get_payment_info_from_input()
+{
+    $body = @file_get_contents('php://input');
+    YandexMoneyLogger::info('Notification: ' . $body);
+    $callbackParams = json_decode($body, true);
+    yamoney_api_common_check_json_last_error();
+
+    try {
+        $notificationModel = ($callbackParams['event'] === NotificationEventType::PAYMENT_SUCCEEDED)
+            ? new NotificationSucceeded($callbackParams)
+            : new NotificationWaitingForCapture($callbackParams);
+    } catch (\Exception $e) {
+        YandexMoneyLogger::error('Invalid notification object - ' . $e->getMessage());
+        header('HTTP/1.1 400 Invalid object in body');
+        exit();
+    }
+
+    $paymentResponse = $notificationModel->getObject();
+    yamoney_api_common_check_value_is_not_empty($paymentResponse->id, '400 Bad Request', 'Empty payment response id');
+
+    return $paymentResponse;
+}
+
+function yamoney_api_common_check_json_last_error()
+{
+    if (json_last_error()) {
+        YandexMoneyLogger::info('Parse POST body failed');
+        header('HTTP/1.1 400 Bad Request');
+        header('Status: 400 Bad Request');
+        exit();
+    }
+}
+
+/**
+ * @param mixed $value
+ * @param string $status
+ * @param string $logMessage
+ */
+function yamoney_api_common_check_value_is_not_empty($value, $status, $logMessage)
+{
+    if (!$value) {
+        YandexMoneyLogger::error($logMessage);
+        header('HTTP/1.1 ' . $status);
+        header('Status: ' . $status);
+        exit();
+    }
+}
+
+function yamoney_api_common_exit_200()
+{
+    header('HTTP/1.1 200 OK');
+    header('Status: 200 OK');
+    exit();
+}
+
+function yamoney_api_common_exit_400()
+{
+    header('HTTP/1.1 400 Bad Request');
+    header('Status: 400 Bad Request');
     exit();
 }
 
@@ -871,15 +782,15 @@ function yamoney_api_check_send_result($type, $code = 0, $message = '')
 function yamoney_api_get_payment_methods()
 {
     return array(
-        \YaMoney\Model\PaymentMethodType::YANDEX_MONEY => t('Payment from a Yandex.Money e-wallet'),
-        \YaMoney\Model\PaymentMethodType::BANK_CARD    => t('Payment by any bank card'),
-        \YaMoney\Model\PaymentMethodType::CASH         => t('Payment in cash via retailers and payment kiosks'),
-        \YaMoney\Model\PaymentMethodType::WEBMONEY     => t('Payment from a WebMoney e-wallet'),
-        \YaMoney\Model\PaymentMethodType::ALFABANK     => t('Payment via Alfa-Click'),
-        \YaMoney\Model\PaymentMethodType::SBERBANK     => t(
+        \YandexCheckout\Model\PaymentMethodType::YANDEX_MONEY => t('Payment from a Yandex.Money e-wallet'),
+        \YandexCheckout\Model\PaymentMethodType::BANK_CARD    => t('Payment by any bank card'),
+        \YandexCheckout\Model\PaymentMethodType::CASH         => t('Payment in cash via retailers and payment kiosks'),
+        \YandexCheckout\Model\PaymentMethodType::WEBMONEY     => t('Payment from a WebMoney e-wallet'),
+        \YandexCheckout\Model\PaymentMethodType::ALFABANK     => t('Payment via Alfa-Click'),
+        \YandexCheckout\Model\PaymentMethodType::SBERBANK     => t(
             'Payment via Sberbank: payment by text messages or Sberbank Online'
         ),
-        \YaMoney\Model\PaymentMethodType::QIWI         => t('Payment via QIWI Wallet'),
+        \YandexCheckout\Model\PaymentMethodType::QIWI         => t('Payment via QIWI Wallet'),
     );
 }
 
