@@ -1,13 +1,13 @@
 <?php
 
-use YaMoney\Client\YandexMoneyApi;
-use YaMoney\Common\Exceptions\ApiException;
-use YaMoney\Model\Status;
-use YaMoney\Request\Payments\CreatePaymentRequest;
-use YaMoney\Request\Payments\CreatePaymentRequestSerializer;
+use YandexCheckout\Client;
+use YandexCheckout\Common\Exceptions\ApiException;
+use YandexCheckout\Model\Status;
+use YandexCheckout\Request\Payments\CreatePaymentRequest;
+use YandexCheckout\Request\Payments\CreatePaymentRequestSerializer;
 
 $modulePath = drupal_get_path('module', 'yamoney_api');
-require_once $modulePath.'/YandexMoneyLogger.php';
+require_once $modulePath.DIRECTORY_SEPARATOR.'YandexMoneyLogger.php';
 
 /**
  * Implements hook_commerce_payment_method_info().
@@ -245,10 +245,10 @@ function ya_commerce_api_submit_form_submit($payment_method, $pane_form, $pane_v
 {
     if (variable_get('yamoney_api_shop', 1)) {
         $modulePath = drupal_get_path('module', 'yamoney_api');
-        require_once $modulePath.DIRECTORY_SEPARATOR.'vendor'.DIRECTORY_SEPARATOR.'autoload.php';
+        require_once $modulePath.DIRECTORY_SEPARATOR.'yandex-checkout-sdk-php'.DIRECTORY_SEPARATOR.'autoload.php';
         $shopId       = variable_get('yamoney_api_shop_id');
         $shopPassword = variable_get('yamoney_api_secret');
-        $apiClient    = new YandexMoneyApi();
+        $apiClient    = new Client();
         $apiClient->setLogger(new YandexMoneyLogger());
         $apiClient->setAuth($shopId, $shopPassword);
 
@@ -266,7 +266,7 @@ function ya_commerce_api_submit_form_submit($payment_method, $pane_form, $pane_v
             };
         }
 
-        $builder        = getBuilder($order, $amount, $paymentMethod, $order_wrapper);
+        $builder        = getCreatePaymentRequestBuilder($order, $amount, $paymentMethod, $order_wrapper);
         $paymentRequest = $builder->build();
         $serializer     = new CreatePaymentRequestSerializer();
         $serializedData = $serializer->serialize($paymentRequest);
@@ -322,21 +322,21 @@ function ya_commerce_api_submit_form_submit($payment_method, $pane_form, $pane_v
  * @param $paymentMethod
  * @param $order_wrapper
  *
- * @return \YaMoney\Request\Payments\CreatePaymentRequestBuilder
+ * @return \YandexCheckout\Request\Payments\CreatePaymentRequestBuilder
  */
-function getBuilder($order, $amount, $paymentMethod, $order_wrapper)
+function getCreatePaymentRequestBuilder($order, $amount, $paymentMethod, $order_wrapper)
 {
-    $confirmationType = \YaMoney\Model\ConfirmationType::REDIRECT;
+    $confirmationType = \YandexCheckout\Model\ConfirmationType::REDIRECT;
     if ($paymentMethod == 'alfabank') {
-        $confirmationType = \YaMoney\Model\ConfirmationType::EXTERNAL;
-        $paymentMethod    = new \YaMoney\Model\PaymentData\PaymentDataAlfabank();
+        $confirmationType = \YandexCheckout\Model\ConfirmationType::EXTERNAL;
+        $paymentMethod    = new \YandexCheckout\Model\PaymentData\PaymentDataAlfabank();
         try {
             $paymentMethod->setLogin($_POST['alfabank_login']);
         } catch (Exception $e) {
             drupal_set_message(t('The login field is filled incorrectly.'), 'error');
         }
     } elseif ($paymentMethod == 'qiwi') {
-        $paymentMethod = new \YaMoney\Model\PaymentData\PaymentDataQiwi();
+        $paymentMethod = new \YandexCheckout\Model\PaymentData\PaymentDataQiwi();
         try {
             $phone = preg_replace('/[^\d]/', '', $_POST['qiwi_phone']);
             $paymentMethod->setPhone($phone);
@@ -348,7 +348,7 @@ function getBuilder($order, $amount, $paymentMethod, $order_wrapper)
     $builder = CreatePaymentRequest::builder()
                                    ->setAmount($amount)
                                    ->setPaymentMethodData($paymentMethod)
-                                   ->setCapture(false)
+                                   ->setCapture(true)
                                    ->setConfirmation(
                                        array(
                                            'type'      => $confirmationType,

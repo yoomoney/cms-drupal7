@@ -636,16 +636,16 @@ function yamoney_api_admin_remove_duplicate_messages($type)
 
 function yamoney_api_admin_settings_test_connection($shopId, $password)
 {
-    require_once dirname(__FILE__) . '/YandexMoneyLogger.php';
-    require_once dirname(__FILE__) . '/vendor/autoload.php';
+    require_once dirname(__FILE__) .DIRECTORY_SEPARATOR.'YandexMoneyLogger.php';
+    require_once dirname(__FILE__) .DIRECTORY_SEPARATOR.'yandex-checkout-sdk-php'.DIRECTORY_SEPARATOR.'autoload.php';
 
-    $apiClient    = new \YaMoney\Client\YandexMoneyApi();
+    $apiClient    = new \YandexCheckout\Client();
     $apiClient->setAuth($shopId, $password);
     $apiClient->setLogger(new YandexMoneyLogger());
 
     try {
         $payment = $apiClient->getPaymentInfo('00000000-0000-0000-0000-000000000001');
-    } catch (\YaMoney\Common\Exceptions\NotFoundException $e) {
+    } catch (\YandexCheckout\Common\Exceptions\NotFoundException $e) {
         return true;
     } catch (\Exception $e) {
         return false;

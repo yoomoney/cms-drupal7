@@ -1,11 +1,11 @@
 <?php
-use YaMoney\Client\YandexMoneyApi;
-use YaMoney\Common\Exceptions\ApiException;
-use YaMoney\Model\PaymentStatus;
-use YaMoney\Request\Payments\CreatePaymentRequest;
+use YandexCheckout\Client;
+use YandexCheckout\Common\Exceptions\ApiException;
+use YandexCheckout\Model\PaymentStatus;
+use YandexCheckout\Request\Payments\CreatePaymentRequest;
 
 $modulePath = drupal_get_path('module', 'yamoney_api');
-require_once $modulePath.'/YandexMoneyLogger.php';
+require_once $modulePath.DIRECTORY_SEPARATOR.'YandexMoneyLogger.php';
 
 /**
  * Implements hook_uc_payment_method().
@@ -92,10 +92,10 @@ function ya_ubercart_api_form($form, &$form_state, $order)
         }
 
         $modulePath = drupal_get_path('module', 'yamoney_api');
-        require_once $modulePath.DIRECTORY_SEPARATOR.'vendor'.DIRECTORY_SEPARATOR.'autoload.php';
+        require_once $modulePath.DIRECTORY_SEPARATOR.'yandex-checkout-sdk-php'.DIRECTORY_SEPARATOR.'autoload.php';
         $shopId       = variable_get('yamoney_api_shop_id');
         $shopPassword = variable_get('yamoney_api_secret');
-        $apiClient    = new YandexMoneyApi();
+        $apiClient    = new Client();
         $apiClient->setAuth($shopId, $shopPassword);
         $apiClient->setLogger(new YandexMoneyLogger);
 
@@ -105,7 +105,7 @@ function ya_ubercart_api_form($form, &$form_state, $order)
         } else {
             $paymentMethod = '';
         }
-        $builder        = getBuilder($order, $amount, $paymentMethod);
+        $builder        = getCreatePaymentRequestBuilder($order, $amount, $paymentMethod);
         $paymentRequest = $builder->build();
 
         try {
@@ -190,21 +190,21 @@ function ya_ubercart_api_form($form, &$form_state, $order)
  * @param $amount
  * @param $paymentMethod
  *
- * @return \YaMoney\Request\Payments\CreatePaymentRequestBuilder
+ * @return \YandexCheckout\Request\Payments\CreatePaymentRequestBuilder
  */
-function getBuilder($order, $amount, $paymentMethod)
+function getCreatePaymentRequestBuilder($order, $amount, $paymentMethod)
 {
-    $confirmationType = \YaMoney\Model\ConfirmationType::REDIRECT;
+    $confirmationType = \YandexCheckout\Model\ConfirmationType::REDIRECT;
     if ($paymentMethod == 'alfabank') {
-        $confirmationType = \YaMoney\Model\ConfirmationType::EXTERNAL;
-        $paymentMethod    = new \YaMoney\Model\PaymentData\PaymentDataAlfabank();
+        $confirmationType = \YandexCheckout\Model\ConfirmationType::EXTERNAL;
+        $paymentMethod    = new \YandexCheckout\Model\PaymentData\PaymentDataAlfabank();
         try {
             $paymentMethod->setLogin($_SESSION['alfabank_login']);
         } catch (Exception $e) {
             drupal_set_message(t('The login field is filled incorrectly.'), 'error');
         }
     } elseif ($paymentMethod == 'qiwi') {
-        $paymentMethod = new \YaMoney\Model\PaymentData\PaymentDataQiwi();
+        $paymentMethod = new \YandexCheckout\Model\PaymentData\PaymentDataQiwi();
         try {
             $paymentMethod->setPhone($_SESSION['qiwi_phone']);
         } catch (Exception $e) {
@@ -215,7 +215,7 @@ function getBuilder($order, $amount, $paymentMethod)
     $builder = CreatePaymentRequest::builder()
                                    ->setAmount($amount)
                                    ->setPaymentMethodData($paymentMethod)
-                                   ->setCapture(false)
+                                   ->setCapture(true)
                                    ->setConfirmation(
                                        array(
                                            'type'      => $confirmationType,
