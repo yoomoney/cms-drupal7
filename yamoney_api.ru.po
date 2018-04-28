@@ -400,6 +400,14 @@ msgstr "Сбербанк Онлайн"
 msgid "Payment via QIWI Wallet"
 msgstr "QIWI"
 
+#: yamoney_api.module:794
+msgid "Installments"
+msgstr "Заплатить по частям"
+
+#: ya_commerce_api.module:94
+msgid "Installments (%s ₽ per month)"
+msgstr "Заплатить по частям (%s ₽ в месяц)"
+
 #: yamoney_api.module:994;1000 ya_ubercart_api.module:271
 msgid "Payments for order No"
 msgstr "Платеж для заказа order ."

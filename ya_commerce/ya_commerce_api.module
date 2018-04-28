@@ -8,6 +8,7 @@ use YandexCheckout\Request\Payments\CreatePaymentRequestSerializer;
 
 $modulePath = drupal_get_path('module', 'yamoney_api');
 require_once $modulePath.DIRECTORY_SEPARATOR.'YandexMoneyLogger.php';
+require_once $modulePath.DIRECTORY_SEPARATOR.'InstallmentsApi.php';
 
 /**
  * Implements hook_commerce_payment_method_info().
@@ -77,6 +78,25 @@ function ya_commerce_api_submit_form($payment_method, $pane_values, $checkout_pa
 
     $disabled = false;
     $methods  = yamoney_api_get_enabled_payment_methods();
+    $wrapper = entity_metadata_wrapper('commerce_order', $order);
+    $order_total = $wrapper->commerce_order_total->value();
+    $amount = commerce_currency_amount_to_decimal($order_total['amount'], $order_total['currency_code']);
+    if ($amount < INSTALLMENTS_MIN_AMOUNT) {
+        unset($methods[\YandexCheckout\Model\PaymentMethodType::INSTALLMENTS]);
+    }
+    if (isset($methods[\YandexCheckout\Model\PaymentMethodType::INSTALLMENTS])) {
+        $shopId = variable_get('yamoney_api_shop_id');
+        $monthlyInstallment = InstallmentsApi::creditPreSchedule($shopId, $amount);
+        if (!empty($monthlyInstallment['amount'])) {
+            $methods[\YandexCheckout\Model\PaymentMethodType::INSTALLMENTS] = sprintf(
+                t('Installments (%s ₽ per month)'),
+                $monthlyInstallment['amount']
+            );
+        } else {
+            $errorMessage = InstallmentsApi::getLastError() ?: 'Unknown error. Could not get installment amount';
+            YandexMoneyLogger::error($errorMessage);
+        }
+    }
 
     if (count($methods) === 1) {
         $disabled = true;
@@ -627,9 +647,9 @@ function theme_ya_commerce_api_form_radios_element($variables)
 {
     $element = $variables['element'];
 
-    if ($element['#value'] == 'alfabank') {
+    if ($element['#value'] == \YandexCheckout\Model\PaymentMethodType::ALFABANK) {
         $element['alfabank']['#theme'] = 'form_radio_element_external';
-    } else if ($element['#value'] == 'qiwi') {
+    } else if ($element['#value'] == \YandexCheckout\Model\PaymentMethodType::QIWI) {
         $element['qiwi']['#theme'] = 'form_radio_element_external';
     }
 
