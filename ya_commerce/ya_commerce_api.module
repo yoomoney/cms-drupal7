@@ -106,9 +106,13 @@ function ya_commerce_api_submit_form($payment_method, $pane_values, $checkout_pa
         return;
     }
 
-    $default_value = variable_get('yamoney_api_default_payment_method', YAMONEY_API_DEFAULT_PAYMENT_METHOD);
-    if (isset($pane_values['payment_details']['payment_method'])) {
-        $default_value = $pane_values['payment_details']['payment_method'];
+    $defaultValue = isset($pane_values['payment_details']['payment_method'])
+        ? $pane_values['payment_details']['payment_method']
+        : variable_get('yamoney_api_default_payment_method', YAMONEY_API_DEFAULT_PAYMENT_METHOD);
+    if (!isset($methods[$defaultValue])) {
+        $defaultValue = isset($methods[YAMONEY_API_DEFAULT_PAYMENT_METHOD])
+            ? YAMONEY_API_DEFAULT_PAYMENT_METHOD
+            : key($methods);
     }
 
     if (!isset($payment_method['settings']['widget'])) {
@@ -127,7 +131,7 @@ function ya_commerce_api_submit_form($payment_method, $pane_values, $checkout_pa
                 $form['payment_method'] = array(
                     '#type'          => 'radios',
                     '#title'         => t('Select your payment type:'),
-                    '#default_value' => $default_value,
+                    '#default_value' => $defaultValue,
                     '#options'       => $methods,
                     '#disabled'      => $disabled,
                     '#theme'         => 'form_radios_element',
@@ -152,7 +156,7 @@ function ya_commerce_api_submit_form($payment_method, $pane_values, $checkout_pa
                 $form['payment_method'] = array(
                     '#type'          => 'radios',
                     '#title'         => t('Select your payment type:'),
-                    '#default_value' => $default_value,
+                    '#default_value' => $defaultValue,
                     '#options'       => $options,
                     '#disabled'      => $disabled,
                     '#prefix'        => '<div id="ym-payment_methods">',
@@ -200,7 +204,7 @@ function ya_commerce_api_submit_form($payment_method, $pane_values, $checkout_pa
                 $form['payment_method'] = array(
                     '#type'          => 'radios',
                     '#title'         => t('Select your payment type:'),
-                    '#default_value' => $default_value,
+                    '#default_value' => $defaultValue,
                     '#options'       => $options,
                     '#disabled'      => $disabled,
                     '#theme'         => 'form_radios_element',

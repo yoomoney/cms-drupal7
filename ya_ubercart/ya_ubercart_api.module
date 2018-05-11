@@ -242,13 +242,13 @@ function getCreatePaymentRequestBuilder($order, $amount, $paymentMethod)
                 'yamoney_api_kassa_tax_'.$tax_id
             ) : YAMONEY_API_DEFAULT_TAX_RATE_ID);
             list($amountTax, $suffixes) = uc_taxes_get_included_tax($product, $order);
-            $amount = $product->price + $amountTax ? $amountTax : 0;
+            $amount = $product->price + ($amountTax ? $amountTax : 0);
             $builder->addReceiptItem($product->title, $amount, $product->qty, $tax);
         }
 
         foreach ($order->line_items as $item) {
             $tax_id = isset($tax->id) ? $tax->id : 0;
-            $amount = $item['amount'] * (isset($tax->id) ? (1 + $tax->data['tax_rate']) : 0);
+            $amount = $item['amount'] * (isset($tax->id) ? (1 + $tax->data['tax_rate']) : 1);
             $tax    = ($tax_id && variable_get('yamoney_api_kassa_tax_'.$tax_id) ? variable_get(
                 'yamoney_api_kassa_tax_'.$tax_id
             ) : YAMONEY_API_DEFAULT_TAX_RATE_ID);
@@ -319,13 +319,18 @@ function uc_payment_method_ya_ubercart_api($op, &$order, $form = array(), &$form
             }
 
             if (variable_get('yamoney_api_paymode') == 'shop' && variable_get('ya_payments_select', 1)) {
+                $defaultValue = isset($_SESSION['pay_method'])
+                    ? $_SESSION['pay_method']
+                    : variable_get('yamoney_api_default_payment_method', YAMONEY_API_DEFAULT_PAYMENT_METHOD);
+                if (!isset($methods[$defaultValue])) {
+                    $defaultValue = isset($methods[YAMONEY_API_DEFAULT_PAYMENT_METHOD])
+                        ? YAMONEY_API_DEFAULT_PAYMENT_METHOD
+                        : key($methods);
+                }
                 $form['pay_method'] = array(
                     '#type'          => 'radios',
                     '#title'         => t('Select your payment type:'),
-                    '#default_value' => isset($_SESSION['pay_method']) ? $_SESSION['pay_method'] : variable_get(
-                        'yamoney_api_default_payment_method',
-                        YAMONEY_API_DEFAULT_PAYMENT_METHOD
-                    ),
+                    '#default_value' => $defaultValue,
                     '#prefix'        => '<div id="ym-payment_methods">',
                     '#options'       => $methods,
                     '#disabled'      => $disabled,
@@ -337,8 +342,9 @@ function uc_payment_method_ya_ubercart_api($op, &$order, $form = array(), &$form
                         'wrapper'  => 'ym-payment_methods',
                     ),
                 );
+                unset($_SESSION['pay_method']);
+                return $form;
             }
-            unset($_SESSION['pay_method']);
             if (variable_get('yamoney_api_billing_enable', 0)) {
                 $form                  = array();
                 $form['customer_name'] = array(
