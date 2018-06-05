@@ -544,3 +544,28 @@ msgstr "Yandex Ubercart Api"
 #: ya_ubercart_api.info:0
 msgid "Yandex.Money module for Ubercart."
 msgstr "Yandex.Money module for Ubercart."
+
+#: yamoney_api.admin.inc:128
+msgid "Transaction data"
+msgstr "Описание платежа"
+
+#: yamoney_api.admin.inc:134
+msgid "Full description of the transaction that the user will see during the checkout process. You can find it in your Yandex.Checkout Merchant Profile. For example, \"Payment for order No. 72 by user@yandex.ru\". Limitations: no more than 128 symbols"
+msgstr ""
+"Это описание транзакции, которое пользователь увидит при оплате, а вы — в личном кабинете Яндекс.Кассы. Например, «Оплата заказа №72».<br>"
+"Чтобы в описание подставлялся номер заказа (как в примере), поставьте на его месте %order_id% (Оплата заказа №%order_id%).<br>"
+"Ограничение для описания — 128 символов."
+
+msgid "Full description of the transaction that the user will see during the checkout process. You can find it in your Yandex.Checkout Merchant Profile. For example, \"Payment for order No. 72 by user@yandex.ru\". Limitations: no more than 128 symbols."
+msgstr ""
+"Это описание транзакции, которое пользователь увидит при оплате, а вы — в личном кабинете Яндекс.Кассы. Например, «Оплата заказа №72».<br>"
+"Чтобы в описание подставлялся номер заказа (как в примере), поставьте на его месте %order_number% (Оплата заказа №%order_number%).<br>"
+"Ограничение для описания — 128 символов."
+
+#: yamoney_api.admin.inc:131
+msgid "Payment for order No. %order_id%"
+msgstr "Оплата заказа №%order_id%"
+
+#: yamoney_api.admin.inc:131
+msgid "Payment for order No. %order_number%"
+msgstr "Оплата заказа №%order_number%"

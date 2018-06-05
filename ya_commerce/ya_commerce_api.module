@@ -2,6 +2,7 @@
 
 use YandexCheckout\Client;
 use YandexCheckout\Common\Exceptions\ApiException;
+use YandexCheckout\Model\Payment;
 use YandexCheckout\Model\Status;
 use YandexCheckout\Request\Payments\CreatePaymentRequest;
 use YandexCheckout\Request\Payments\CreatePaymentRequestSerializer;
@@ -264,6 +265,11 @@ function ya_commerce_api_submit_form_validate(
 
 /**
  * Payment method callback: checkout form submission.
+ * @param $payment_method
+ * @param $pane_form
+ * @param $pane_values
+ * @param $order
+ * @param $charge
  */
 function ya_commerce_api_submit_form_submit($payment_method, $pane_form, $pane_values, $order, $charge)
 {
@@ -294,23 +300,9 @@ function ya_commerce_api_submit_form_submit($payment_method, $pane_form, $pane_v
         $paymentRequest = $builder->build();
         $serializer     = new CreatePaymentRequestSerializer();
         $serializedData = $serializer->serialize($paymentRequest);
-        $idempotencyKey = $order->order_number.'_'.$paymentMethod.'_'.uniqid();
         YandexMoneyLogger::info('Create payment request: '.json_encode($serializedData));
-        YandexMoneyLogger::info('Idempotency key : '.$idempotencyKey);
         try {
-            $tries = 0;
-            do {
-                $response = $apiClient->createPayment(
-                    $paymentRequest,
-                    $idempotencyKey
-                );
-                $tries++;
-                if ($tries > 3) {
-                    YandexMoneyLogger::info('Maximum create payment tries reached. Order id - '.$order->order_number);
-                    drupal_set_message(t('Unable to create payment.'), 'error');
-                    break;
-                }
-            } while ($response == null);
+            $response = $apiClient->createPayment($paymentRequest);
             if ($response) {
                 if ($response->status !== Status::CANCELED) {
                     $transaction = commerce_payment_transaction_new($payment_method['instance_id'], $order->order_id);
@@ -373,6 +365,7 @@ function getCreatePaymentRequestBuilder($order, $amount, $paymentMethod, $order_
                                    ->setAmount($amount)
                                    ->setPaymentMethodData($paymentMethod)
                                    ->setCapture(true)
+                                   ->setDescription(ya_commerce_api_create_description($order))
                                    ->setConfirmation(
                                        array(
                                            'type'      => $confirmationType,
@@ -736,4 +729,25 @@ function ajax_payment_method_form_callback(&$form, &$form_state)
     }
 
     return $form['commerce_payment']['payment_details']['payment_method'];
+}
+
+
+/**
+ * @param $orderInfo
+ * @return bool|string
+ */
+function ya_commerce_api_create_description($orderInfo)
+{
+    $descriptionTemplate = variable_get('yamoney_api_description_template', t('Payment for order No. %order_number%'));
+
+    $replace = array();
+    foreach ($orderInfo as $key => $value) {
+        if (is_scalar($value)) {
+            $replace['%'.$key.'%'] = $value;
+        }
+    }
+
+    $description = strtr($descriptionTemplate, $replace);
+
+    return (string)mb_substr($description, 0, Payment::MAX_LENGTH_DESCRIPTION);
 }
