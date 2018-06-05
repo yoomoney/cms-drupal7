@@ -120,6 +120,7 @@ function yamoney_api_uninstall() {
     'yamoney_api_ip',
     'yamoney_api_payment_method',
     'yamoney_api_default_payment_method',
+    'yamoney_api_description_template',
     'yamoney_api_shop',
     'yamoney_api_shop_id',
     'yamoney_api_secret',

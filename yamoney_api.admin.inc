@@ -80,7 +80,7 @@ function yamoney_api_admin_settings()
             'Issue and activate a secret key under your Yandex.Checkout\'s Merchant Profile. Then copy it here.'
         ),
         '#default_value' => variable_get('yamoney_api_secret', ''),
-        '#size'          => 17,
+        '#size'          => 60,
     );
 
     $paymode_states                                       = array(
@@ -123,6 +123,24 @@ function yamoney_api_admin_settings()
         '#states'        => $paymode_states,
     );
 
+    if (module_exists('commerce')) {
+        $form['yamoney_api_kassa_tab']['yamoney_api_description_template'] = array(
+            '#type'          => 'textfield',
+            '#title'         => t('Transaction data'),
+            '#description'   => t("Full description of the transaction that the user will see during the checkout process. You can find it in your Yandex.Checkout Merchant Profile. For example, \"Payment for order No. 72 by user@yandex.ru\". Limitations: no more than 128 symbols."),
+            '#default_value' => variable_get('yamoney_api_description_template', t('Payment for order No. %order_number%')),
+        );
+    }
+
+    if (module_exists('uc_payment')) {
+        $form['yamoney_api_kassa_tab']['yamoney_api_description_template'] = array(
+            '#type'          => 'textfield',
+            '#title'         => t('Transaction data'),
+            '#description'   => t("Full description of the transaction that the user will see during the checkout process. You can find it in your Yandex.Checkout Merchant Profile. For example, \"Payment for order No. 72 by user@yandex.ru\". Limitations: no more than 128 symbols"),
+            '#default_value' => variable_get('yamoney_api_description_template', t('Payment for order No. %order_id%')),
+            '#size'          => 60,
+        );
+    }
 
     /*********** tax edit****************/
 
