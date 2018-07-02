@@ -399,7 +399,7 @@ function getCreatePaymentRequestBuilder($order, $amount, $paymentMethod, $order_
                 )
                     : YAMONEY_API_DEFAULT_TAX_RATE_ID
                 );
-                $amount   = getPriceByData(
+                $amount   = commerce_currency_amount_to_decimal(
                     $product->commerce_price['und'][0]['amount'],
                     $product->commerce_price['und'][0]['currency_code']
                 );
@@ -409,7 +409,7 @@ function getCreatePaymentRequestBuilder($order, $amount, $paymentMethod, $order_
 
             if ($line_item_wrapper->value()->type == 'shipping') {
                 $shipping = $line_item_wrapper->value();
-                $amount   = getPriceByData(
+                $amount   = commerce_currency_amount_to_decimal(
                     $shipping->commerce_total['und'][0]['amount'],
                     $shipping->commerce_total['und'][0]['currency_code']
                 );
@@ -419,23 +419,6 @@ function getCreatePaymentRequestBuilder($order, $amount, $paymentMethod, $order_
     }
 
     return $builder;
-}
-
-function getPriceByData($amount, $currency_code)
-{
-    $currency     = commerce_currency_load($currency_code);
-    $amount_price = commerce_currency_amount_to_decimal($amount, $currency_code);
-    $price        = number_format(
-        commerce_currency_round(
-            abs($amount_price),
-            $currency
-        ),
-        $currency['decimals'],
-        $currency['decimal_separator'],
-        $currency['thousands_separator']
-    );
-
-    return $price;
 }
 
 /**
