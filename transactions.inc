@@ -109,7 +109,7 @@ function yamoney_api_transaction_load_by_order($order_id) {
 }
 
 /**
- * @param int $order_id Order id.
+ * @param string $payment_id
  * @return YAMoneyApiTransaction
  */
 function yamoney_api_transaction_load_by_payment($payment_id) {
@@ -159,15 +159,28 @@ function yamoney_api_transaction_save(YAMoneyApiTransaction $transaction) {
 
 /**
  * Simply set transaction status.
- * @param $ymid int Transaction id.
+ * @param $payment_id string Transaction id in Kassa
  * @param $status string Transaction status.
  * @return bool
  */
-function yamoney_api_update_transaction_status($ymid, $status) {
+function yamoney_api_update_transaction_status($payment_id, $status) {
   return !!db_update('yamoney_api_transaction')
     ->fields(array('status' => $status))
-    ->condition('ymid', $ymid)
+    ->condition('payment_id', $payment_id)
     ->execute();
+}
+
+/**
+ * Simply set transaction status.
+ * @param $payment_id string Transaction id in Kassa
+ * @param $amount
+ * @return bool
+ */
+function yamoney_api_update_transaction_amount($payment_id, $amount) {
+    return !!db_update('yamoney_api_transaction')
+        ->fields(array('amount' => $amount))
+        ->condition('payment_id', $payment_id)
+        ->execute();
 }
 
 /**
@@ -185,17 +198,78 @@ function yamoney_api_transaction_delete($ymid) {
  * Render all transactions page
  * @return mixed
  */
-function yamoney_api_transactions_page() {
-  $transactions = db_select('yamoney_api_transaction', 'yt')
-    ->fields('yt')
-    ->extend('PagerDefault') // this adds the pager
-    ->limit(20);
-  $transactions = $transactions->execute()->fetchAll();
+function yamoney_api_transactions_page()
+{
+    $transactions = db_select('yamoney_api_transaction', 'yt')
+        ->fields('yt')
+        ->extend('PagerDefault')// this adds the pager
+        ->orderBy('ymid', 'DESC')
+        ->limit(20);
+    $transactions = $transactions->execute()->fetchAll();
 
-  $table = yamoney_api_create_transaction_table($transactions);
-  $output = drupal_render($table);
-  drupal_set_title(t('Transactions'));
-  return $output;
+    $table  = yamoney_api_create_transaction_table($transactions);
+    $output = drupal_render($table);
+    drupal_set_title(t('Transactions'));
+    drupal_add_js('
+        function yamoney_api_capture_payment_request() {
+            document.getElementsByTagName("body")[0].style.cursor = "wait";
+            let paymentId = this.dataset.paymentId;
+            let r = new XMLHttpRequest();
+            let el = document.createElement("span");
+            el.innerText = this.text;
+            this.parentElement.insertBefore(el, this);
+            this.style.display = "none";
+            r.open("POST", "'.url('admin/yamoney_api/actions').'", true);
+            r.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+            r.onreadystatechange = function () {
+                if (r.readyState !== 4) {
+                    return;
+                }
+                document.getElementsByTagName("body")[0].style.cursor = "default";
+                if(r.status === 200 && r.responseText === "OK") { 
+                    alert("'.t('Вы подтвердили платёж в Яндекс.Кассе.').'");
+                } else {
+                    alert("'.t('Платёж не подтвердился. Попробуйте ещё раз.').'");
+                }
+                location.reload();
+            };
+            r.send("action=capturePayment&paymentId=" + this.dataset.paymentId 
+                    + "&module=" + this.dataset.module);    
+        }
+        function yamoney_api_cancel_payment_request() {
+            document.getElementsByTagName("body")[0].style.cursor = "wait";
+            let paymentId = this.dataset.paymentId;
+            let r = new XMLHttpRequest();
+            let el = document.createElement("span");
+            el.innerText = this.text;
+            this.parentElement.insertBefore(el, this);
+            this.style.display = "none";
+            r.open("POST", "'.url('admin/yamoney_api/actions').'", true);
+            r.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+            r.onreadystatechange = function () {
+                if (r.readyState !== 4) {
+                    return;
+                }
+                document.getElementsByTagName("body")[0].style.cursor = "default";
+                if(r.status === 200 && r.responseText === "OK") {
+                    alert("'.t('Вы отменили платёж в Яндекс.Кассе. Деньги вернутся клиенту.').'");
+                } else {
+                    alert("'.t('Платёж не отменился. Попробуйте ещё раз.').'");
+                }
+                location.reload();
+            };
+            r.send("action=cancelPayment&paymentId=" + this.dataset.paymentId
+                    + "&module=" + this.dataset.module);    
+        }
+        document.addEventListener("DOMContentLoaded", function() {
+           [].forEach.call(document.getElementsByClassName("yamoney_api_capture_request_link"), function(el) {
+              el.addEventListener("click", yamoney_api_capture_payment_request);
+           });
+           [].forEach.call(document.getElementsByClassName("yamoney_api_cancel_request_link"), function(el) {
+              el.addEventListener("click", yamoney_api_cancel_payment_request);
+           });
+        });', 'inline');
+    return $output;
 }
 
 /**
@@ -208,6 +282,7 @@ function yamoney_api_transactions_user_page($user) {
     ->fields('yt')
     ->condition('uid', $user->uid)
     ->extend('PagerDefault') // this adds the pager
+    ->orderBy('ymid', 'DESC')
     ->limit(20);
   $transactions = $transactions->execute()->fetchAll();
 
@@ -220,15 +295,45 @@ function yamoney_api_transactions_user_page($user) {
 
 /**
  * @param array $table_rows
- * @return null|string
+ * @return array
  */
 function yamoney_api_create_transaction_table($table_rows) {
   $rows = array();
   if (count($table_rows) > 0) {
     foreach ($table_rows as $item) {
-      $rows[] = yamoney_api_transaction_build_payment_row((array) $item);
+      $row = yamoney_api_transaction_build_payment_row((array)$item);
+      $orderId = $row['order_id'];
+      $actions = '';
+        $module = '';
+        if (module_exists('commerce')
+            && commerce_order_load($row['order_id'])
+            && ya_commerce_api_commerce_payment_transaction_load($row['payment_id'])
+        ) {
+            $module          = 'commerce';
+            $row['order_id'] = l($row['order_id'], 'admin/commerce/orders/'.$orderId);
+            $actions         .= l(t('View'), 'admin/commerce/orders/'.$orderId).' ';
+        } elseif (module_exists('uc_payment')
+            && uc_order_load($row['order_id'])
+        ) {
+            $module          = 'uc_payment';
+            $row['order_id'] = l($row['order_id'], 'admin/store/orders/'.$orderId);
+            $actions         .= l(t('View'), 'admin/store/orders/'.$orderId).' ';
+        }
+        if ($row['status'] === \YandexCheckout\Model\PaymentStatus::WAITING_FOR_CAPTURE) {
+            if ($module) {
+                if ($module === 'commerce') {
+                    $actions .= l(t('Edit'), 'admin/commerce/orders/'.$orderId.'/edit');
+                } elseif ($module === 'uc_payment') {
+                    $actions .= l(t('Edit'), 'admin/store/orders/'.$orderId.'/edit');
+                }
+                $actions .= ' <a href="javascript:void(0);" class="yamoney_api_capture_request_link" data-payment-id="'.$row['payment_id'].'" data-module="'.$module.'">'.t('Confirm').'</a> ';
+                $actions .= '<a href="javascript:void(0);" class="yamoney_api_cancel_request_link" data-payment-id="'.$row['payment_id'].'" data-module="'.$module.'">'.t('Cancel').'</a>';
+            }
+        }
+        $row[]  = $actions;
+        $rows[] = $row;
     }
-    $header = array(t('Id'), t('Name'), t('Amount'), t('Date/Time'), t('Status'), t('E-mail'), t('Order ID'));
+    $header = array(t('Id'), t('Name'), t('Amount'), t('Date/Time'), t('Status'), t('E-mail'), t('Order ID'), t('Payment ID'), t('Actions'));
     $table['table_rows'] = array(
       '#theme' => 'table',
       '#rows' => $rows,

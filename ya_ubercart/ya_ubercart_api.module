@@ -1,9 +1,11 @@
 <?php
-use YandexCheckout\Client;
 use YandexCheckout\Common\Exceptions\ApiException;
 use YandexCheckout\Model\Payment;
 use YandexCheckout\Model\PaymentStatus;
 use YandexCheckout\Request\Payments\CreatePaymentRequest;
+use YandexCheckout\Request\Payments\CreatePaymentRequestBuilder;
+use YandexCheckout\Request\Payments\Payment\CreateCaptureRequest;
+use YandexCheckout\Request\Payments\Payment\CreateCaptureRequestBuilder;
 
 $modulePath = drupal_get_path('module', 'yamoney_api');
 require_once $modulePath.DIRECTORY_SEPARATOR.'YandexMoneyLogger.php';
@@ -61,25 +63,6 @@ function ya_ubercart_api_uc_payment_method()
 function ya_ubercart_api_form($form, &$form_state, $order)
 {
     global $user;
-    $transaction           = new YAMoneyApiTransaction();
-    $transaction->uid      = $user->uid;
-    $transaction->amount   = $order->order_total;
-    $transaction->mail     = isset($user->mail) ? $user->mail : $order->primary_email;
-    $transaction->order_id = $order->order_id;
-    $form                  = array();
-    if (!yamoney_api_transaction_save($transaction)) {
-        $error_message = t('Can not save transaction.');
-
-        // show message to the user
-        drupal_set_message(t('Payment failed: %message', array('%message' => $error_message)), 'error');
-
-        // log error to watchdog
-        watchdog('ya_ubercart', 'Payment failed: %message', array('%message' => $error_message), WATCHDOG_WARNING);
-
-        // redirect to fail page
-        $cancel_url = url('yamoney_api/fail');
-        drupal_goto($cancel_url);
-    }
 
     if (variable_get('yamoney_api_billing_enable')) {
         uc_cart_complete_sale($order);
@@ -95,11 +78,7 @@ function ya_ubercart_api_form($form, &$form_state, $order)
 
         $modulePath = drupal_get_path('module', 'yamoney_api');
         require_once $modulePath.DIRECTORY_SEPARATOR.'yandex-checkout-sdk-php'.DIRECTORY_SEPARATOR.'autoload.php';
-        $shopId       = variable_get('yamoney_api_shop_id');
-        $shopPassword = variable_get('yamoney_api_secret');
-        $apiClient    = new Client();
-        $apiClient->setAuth($shopId, $shopPassword);
-        $apiClient->setLogger(new YandexMoneyLogger);
+        $apiClient = yamoney_api__common__get_api_client();
 
         $amount = $order->order_total;
         if (isset($_SESSION['pay_method'])) {
@@ -107,36 +86,34 @@ function ya_ubercart_api_form($form, &$form_state, $order)
         } else {
             $paymentMethod = '';
         }
-        $builder        = getCreatePaymentRequestBuilder($order, $amount, $paymentMethod);
+        $builder        = ya_ubercart_api_get_create_payment_request_builder($order, $amount, $paymentMethod);
         $paymentRequest = $builder->build();
 
         try {
             $response = $apiClient->createPayment($paymentRequest, $order->order_id.'_'.$paymentMethod);
             if ($response->status !== PaymentStatus::CANCELED) {
+                $transaction             = new YAMoneyApiTransaction();
                 $transaction->uid        = $user->uid;
                 $transaction->amount     = $order->order_total;
                 $transaction->mail       = isset($user->mail) ? $user->mail : $order->primary_email;
                 $transaction->order_id   = $order->order_id;
                 $transaction->payment_id = $response->getId();
-                if (!yamoney_api_transaction_save($transaction, true)) {
+                $transaction->status     = $response->getStatus();
+                if (!yamoney_api_transaction_save($transaction)) {
                     $error_message = t('Can not save transaction.');
 
                     // show message to the user
                     drupal_set_message(t('Payment failed: %message', array('%message' => $error_message)), 'error');
 
                     // log error to watchdog
-                    watchdog(
-                        'ya_ubercart',
-                        'Payment failed: %message',
-                        array('%message' => $error_message),
-                        WATCHDOG_WARNING
-                    );
+                    watchdog('ya_ubercart', 'Payment failed: %message', array('%message' => $error_message),
+                        WATCHDOG_WARNING);
                     // redirect to fail page
                     $cancel_url = url('yamoney_api/fail');
                     drupal_goto($cancel_url);
                 }
 
-                uc_order_update_status($order->order_id, 'payment_received');
+                uc_order_update_status($order->order_id, 'pending');
                 $confirmationUrl                        = $response->confirmation->confirmationUrl;
                 $form['actions']['submit']['#submit'][] = 'ya_ubercart_api_redirect_handler';
                 $form['actions']['submit']              = array(
@@ -154,6 +131,25 @@ function ya_ubercart_api_form($form, &$form_state, $order)
             drupal_set_message('Unable to pay with this method.', 'error');
         }
     } else {
+        $transaction           = new YAMoneyApiTransaction();
+        $transaction->uid      = $user->uid;
+        $transaction->amount   = $order->order_total;
+        $transaction->mail     = isset($user->mail) ? $user->mail : $order->primary_email;
+        $transaction->order_id = $order->order_id;
+        $form                  = array();
+        if (!yamoney_api_transaction_save($transaction)) {
+            $error_message = t('Can not save transaction.');
+
+            // show message to the user
+            drupal_set_message(t('Payment failed: %message', array('%message' => $error_message)), 'error');
+
+            // log error to watchdog
+            watchdog('ya_ubercart', 'Payment failed: %message', array('%message' => $error_message), WATCHDOG_WARNING);
+
+            // redirect to fail page
+            $cancel_url = url('yamoney_api/fail');
+            drupal_goto($cancel_url);
+        }
 
         $target_url      = yamoney_api_get_order_submission_url();
         $params          = yamoney_api_get_order_submission_params($transaction);
@@ -194,7 +190,7 @@ function ya_ubercart_api_form($form, &$form_state, $order)
  *
  * @return \YandexCheckout\Request\Payments\CreatePaymentRequestBuilder
  */
-function getCreatePaymentRequestBuilder($order, $amount, $paymentMethod)
+function ya_ubercart_api_get_create_payment_request_builder($order, $amount, $paymentMethod)
 {
     $confirmationType = \YandexCheckout\Model\ConfirmationType::REDIRECT;
     if ($paymentMethod == 'alfabank') {
@@ -217,7 +213,7 @@ function getCreatePaymentRequestBuilder($order, $amount, $paymentMethod)
     $builder = CreatePaymentRequest::builder()
                                    ->setAmount($amount)
                                    ->setPaymentMethodData($paymentMethod)
-                                   ->setCapture(true)
+                                   ->setCapture(yamoney_api__common__get_capture_value($paymentMethod))
                                    ->setDescription(ya_ubercart_api_create_description($order))
                                    ->setConfirmation(
                                        array(
@@ -229,7 +225,17 @@ function getCreatePaymentRequestBuilder($order, $amount, $paymentMethod)
                                        'cms_name'       => 'ya_api_drupal_ubercart',
                                        'module_version' => YAMONEY_MODULE_VERSION,
                                    ));
-    YandexMoneyLogger::info('Return url:'.ya_ubercart_api_get_return_url($order));
+    ya_ubercart_api_set_receipt_if_needed($builder, $order);
+
+    return $builder;
+}
+
+/**
+ * @param CreatePaymentRequestBuilder|CreateCaptureRequestBuilder $builder
+ * @param $order
+ */
+function ya_ubercart_api_set_receipt_if_needed($builder, $order)
+{
     $tax = uc_taxes_uc_calculate_tax($order);
     if (module_exists('uc_taxes') && count($tax) && variable_get('yamoney_api_send_check', false)) {
         $builder->setReceiptEmail($order->primary_email);
@@ -249,6 +255,9 @@ function getCreatePaymentRequestBuilder($order, $amount, $paymentMethod)
         }
 
         foreach ($order->line_items as $item) {
+            if ($item['type'] === 'subtotal') {
+                continue;
+            }
             $tax_id = isset($tax->id) ? $tax->id : 0;
             $amount = $item['amount'] * (isset($tax->id) ? (1 + $tax->data['tax_rate']) : 1);
             $tax    = ($tax_id && variable_get('yamoney_api_kassa_tax_'.$tax_id) ? variable_get(
@@ -258,8 +267,6 @@ function getCreatePaymentRequestBuilder($order, $amount, $paymentMethod)
             $builder->addReceiptShipping($item['title'], $amount, $tax);
         }
     }
-
-    return $builder;
 }
 
 /**
@@ -581,4 +588,57 @@ function ya_ubercart_api_create_description($orderInfo)
     $description = strtr($descriptionTemplate, $replace);
 
     return (string)mb_substr($description, 0, Payment::MAX_LENGTH_DESCRIPTION);
+}
+
+/**
+ * @param \YandexCheckout\Model\PaymentInterface $payment
+ * @param $order
+ */
+function ya_ubercart_api_capture_payment($payment, $order)
+{
+    $apiClient = yamoney_api__common__get_api_client();
+    $response  = null;
+    try {
+        $builder = CreateCaptureRequest::builder();
+        $amount  = $order->order_total;
+        $builder->setAmount($amount);
+        ya_ubercart_api_set_receipt_if_needed($builder, $order);
+
+        $request  = $builder->build();
+        $response = $apiClient->capturePayment($request, $payment->getId());
+    } catch (\Exception $e) {
+        $this->module->log('error', 'Capture error: '.$e->getMessage());
+        $response = $payment;
+    }
+    yamoney_api_common_check_value_is_not_empty($response, '400 Bad Request', 'Empty payment info');
+    if ($response->getStatus() !== \YandexCheckout\Model\PaymentStatus::SUCCEEDED) {
+        $this->module->log('error', 'Capture payment error: capture failed');
+        return;
+    }
+    yamoney_api_update_transaction_status($response->getId(), $response->getStatus());
+    uc_order_comment_save($order->order_id, 0, t('Вы подтвердили платёж в Яндекс.Кассе.'));
+
+    echo "OK";
+    exit();
+}
+
+/**
+ * @param string $paymentId
+ * @param $order
+ */
+function ya_ubercart_api_cancel_payment($paymentId, $order)
+{
+    $apiClient = yamoney_api__common__get_api_client();
+    $response  = $apiClient->cancelPayment($paymentId);
+    if (!$response || $response->getStatus() !== PaymentStatus::CANCELED) {
+        $this->module->log('error', 'Cancel payment error: cancel failed');
+        return;
+    }
+
+    uc_order_update_status($order->order_id, YAMONEY_API_ORDER_STATUS_CANCELED);
+    yamoney_api_update_transaction_status($paymentId, PaymentStatus::CANCELED);
+    uc_order_comment_save($order->order_id, 0, t('Вы отменили платёж в Яндекс.Кассе. Деньги вернутся клиенту.'));
+
+    echo "OK";
+    exit();
 }

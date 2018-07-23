@@ -123,6 +123,7 @@ function yamoney_api_admin_settings()
         '#states'        => $paymode_states,
     );
 
+    /*********** Transaction data ***********/
     if (module_exists('commerce')) {
         $form['yamoney_api_kassa_tab']['yamoney_api_description_template'] = array(
             '#type'          => 'textfield',
@@ -142,7 +143,15 @@ function yamoney_api_admin_settings()
         );
     }
 
-    /*********** tax edit****************/
+    /*********** Hold mode ***********/
+    $form['yamoney_api_kassa_tab']['yamoney_api_enable_hold_mode'] = array(
+        '#type'          => 'checkbox',
+        '#title'         => t('Включить отложенную оплату'),
+        '#description'   => t('Если опция включена, платежи с карт проходят в 2 этапа: у клиента сумма замораживается, и вам вручную нужно подтвердить её списание – через панель администратора. <a href="https://kassa.yandex.ru/features-pre-authorisation.html" target="_blank">Подробное описание Холдирования.</a>'),
+        '#default_value' => variable_get('yamoney_api_enable_hold_mode', 0),
+    );
+
+    /*********** tax edit ****************/
 
     if (module_exists('commerce_tax') && module_exists('commerce_tax_ui')) {
         $form['yamoney_api_kassa_tab']['yamoney_api_send_check'] = array(

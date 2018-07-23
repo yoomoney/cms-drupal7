@@ -1,11 +1,13 @@
 <?php
 
-use YandexCheckout\Client;
 use YandexCheckout\Common\Exceptions\ApiException;
 use YandexCheckout\Model\Payment;
-use YandexCheckout\Model\Status;
+use YandexCheckout\Model\PaymentStatus;
 use YandexCheckout\Request\Payments\CreatePaymentRequest;
+use YandexCheckout\Request\Payments\CreatePaymentRequestBuilder;
 use YandexCheckout\Request\Payments\CreatePaymentRequestSerializer;
+use YandexCheckout\Request\Payments\Payment\CreateCaptureRequest;
+use YandexCheckout\Request\Payments\Payment\CreateCaptureRequestBuilder;
 
 $modulePath = drupal_get_path('module', 'yamoney_api');
 require_once $modulePath.DIRECTORY_SEPARATOR.'YandexMoneyLogger.php';
@@ -273,14 +275,11 @@ function ya_commerce_api_submit_form_validate(
  */
 function ya_commerce_api_submit_form_submit($payment_method, $pane_form, $pane_values, $order, $charge)
 {
+    global $user;
     if (variable_get('yamoney_api_shop', 1)) {
         $modulePath = drupal_get_path('module', 'yamoney_api');
         require_once $modulePath.DIRECTORY_SEPARATOR.'yandex-checkout-sdk-php'.DIRECTORY_SEPARATOR.'autoload.php';
-        $shopId       = variable_get('yamoney_api_shop_id');
-        $shopPassword = variable_get('yamoney_api_secret');
-        $apiClient    = new Client();
-        $apiClient->setLogger(new YandexMoneyLogger());
-        $apiClient->setAuth($shopId, $shopPassword);
+        $apiClient = yamoney_api__common__get_api_client();
 
         $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
         $currency_code = $order_wrapper->commerce_order_total->currency_code->value();
@@ -296,31 +295,38 @@ function ya_commerce_api_submit_form_submit($payment_method, $pane_form, $pane_v
             };
         }
 
-        $builder        = getCreatePaymentRequestBuilder($order, $amount, $paymentMethod, $order_wrapper);
+        $builder        = ya_commerce_api_get_create_payment_request_builder($order, $amount, $paymentMethod, $order_wrapper);
         $paymentRequest = $builder->build();
         $serializer     = new CreatePaymentRequestSerializer();
         $serializedData = $serializer->serialize($paymentRequest);
         YandexMoneyLogger::info('Create payment request: '.json_encode($serializedData));
         try {
             $response = $apiClient->createPayment($paymentRequest);
-            if ($response) {
-                if ($response->status !== Status::CANCELED) {
-                    $transaction = commerce_payment_transaction_new($payment_method['instance_id'], $order->order_id);
-                    $transaction->instance_id   = $payment_method['instance_id'];
-                    $transaction->remote_id     = $response->id;
-                    $transaction->amount        = intval($amount) * 100;
-                    $transaction->currency_code = $currency_code;
-                    $transaction->status        = COMMERCE_PAYMENT_STATUS_PENDING;
-                    $transaction->remote_status = $response->getStatus();
-                    commerce_order_status_update($order, 'checkout_payment');
-                    if (commerce_payment_transaction_save($transaction) && commerce_order_save($order)) {
-                        $confirmationUrl = $response->confirmation->confirmationUrl;
-                        drupal_goto($confirmationUrl);
-                    }
-                } else {
-                    YandexMoneyLogger::error('Payment not created. Order id: '.$order->order_number);
-                    drupal_set_message(t('Unable to create payment.'), 'error');
+            if ($response && $response->status !== PaymentStatus::CANCELED) {
+                $transaction = commerce_payment_transaction_new($payment_method['instance_id'], $order->order_id);
+                $transaction->instance_id   = $payment_method['instance_id'];
+                $transaction->remote_id     = $response->id;
+                $transaction->amount        = intval($amount) * 100;
+                $transaction->currency_code = $currency_code;
+                $transaction->status        = COMMERCE_PAYMENT_STATUS_PENDING;
+                $transaction->remote_status = $response->getStatus();
+                commerce_order_status_update($order, YAMONEY_API_ORDER_STATUS_PENDING);
+                $ymTransaction           = new YAMoneyApiTransaction();
+                $ymTransaction->uid      = isset($user->uid) ? $user->uid : 0;
+                $ymTransaction->amount   = $amount;
+                $ymTransaction->mail     = isset($user->mail) ? $user->mail : $order->primary_email;
+                $ymTransaction->order_id = $order->order_id;
+                $ymTransaction->payment_id = $response->getId();
+                $ymTransaction->status   = $response->getStatus();
+                if (commerce_payment_transaction_save($transaction) && commerce_order_save($order)
+                    && yamoney_api_transaction_save($ymTransaction)
+                ) {
+                    $confirmationUrl = $response->confirmation->confirmationUrl;
+                    drupal_goto($confirmationUrl);
                 }
+            } else {
+                YandexMoneyLogger::error('Payment not created. Order id: '.$order->order_number);
+                drupal_set_message(t('Unable to create payment.'), 'error');
             }
 
         } catch (ApiException $e) {
@@ -335,12 +341,12 @@ function ya_commerce_api_submit_form_submit($payment_method, $pane_form, $pane_v
 /**
  * @param $order
  * @param $amount
- * @param $paymentMethod
- * @param $order_wrapper
+ * @param string $paymentMethod
+ * @param EntityMetadataWrapper $order_wrapper
  *
  * @return \YandexCheckout\Request\Payments\CreatePaymentRequestBuilder
  */
-function getCreatePaymentRequestBuilder($order, $amount, $paymentMethod, $order_wrapper)
+function ya_commerce_api_get_create_payment_request_builder($order, $amount, $paymentMethod, $order_wrapper)
 {
     $confirmationType = \YandexCheckout\Model\ConfirmationType::REDIRECT;
     if ($paymentMethod == 'alfabank') {
@@ -364,7 +370,7 @@ function getCreatePaymentRequestBuilder($order, $amount, $paymentMethod, $order_
     $builder = CreatePaymentRequest::builder()
                                    ->setAmount($amount)
                                    ->setPaymentMethodData($paymentMethod)
-                                   ->setCapture(true)
+                                   ->setCapture(yamoney_api__common__get_capture_value($paymentMethod))
                                    ->setDescription(ya_commerce_api_create_description($order))
                                    ->setConfirmation(
                                        array(
@@ -377,48 +383,57 @@ function getCreatePaymentRequestBuilder($order, $amount, $paymentMethod, $order_
                                        'module_version' => YAMONEY_MODULE_VERSION,
                                    ));
 
-    if (variable_get('yamoney_api_send_check', false)) {
-        $builder->setReceiptEmail($order->mail);
-        foreach ($order_wrapper->commerce_line_items as $delta => $line_item_wrapper) {
-            if ($line_item_wrapper->value()->type == 'product') {
-                $product    = $line_item_wrapper->commerce_product->value();
-                $components = $product->commerce_price['und'][0]['data']['components'];
-                $tax_id     = false;
-                foreach ($components as $component) {
-                    $info = explode('|', $component['name']);
-                    if (count($info) && $info[0] == 'tax') {
-                        $tax_id = $info[1];
-                        break;
-                    }
-                }
-
-                $quantity = $line_item_wrapper->quantity->value();
-                $tax      = ($tax_id
-                             && variable_get('yamoney_api_kassa_tax_'.$tax_id) ? variable_get(
-                    'yamoney_api_kassa_tax_'.$tax_id
-                )
-                    : YAMONEY_API_DEFAULT_TAX_RATE_ID
-                );
-                $amount   = commerce_currency_amount_to_decimal(
-                    $product->commerce_price['und'][0]['amount'],
-                    $product->commerce_price['und'][0]['currency_code']
-                );
-
-                $builder->addReceiptItem($product->title, $amount, $quantity, $tax);
-            }
-
-            if ($line_item_wrapper->value()->type == 'shipping') {
-                $shipping = $line_item_wrapper->value();
-                $amount   = commerce_currency_amount_to_decimal(
-                    $shipping->commerce_total['und'][0]['amount'],
-                    $shipping->commerce_total['und'][0]['currency_code']
-                );
-                $builder->addReceiptShipping('Доставка', $amount, YAMONEY_API_DEFAULT_TAX_RATE_ID);
-            }
-        }
-    }
+    ya_commerce_api_set_receipt_if_needed($builder, $order, $order_wrapper);
 
     return $builder;
+}
+
+/**
+ * @param CreatePaymentRequestBuilder|CreateCaptureRequestBuilder $builder
+ * @param $order
+ * @param EntityMetadataWrapper $order_wrapper
+ */
+function ya_commerce_api_set_receipt_if_needed($builder, $order, $order_wrapper)
+{
+    if (!variable_get('yamoney_api_send_check', false)) {
+        return;
+    }
+
+    $builder->setReceiptEmail($order->mail);
+    foreach ($order_wrapper->commerce_line_items as $delta => $line_item_wrapper) {
+        if ($line_item_wrapper->value()->type == 'product') {
+            $product    = $line_item_wrapper->commerce_product->value();
+            $components = $product->commerce_price['und'][0]['data']['components'];
+            $tax_id     = false;
+            foreach ($components as $component) {
+                $info = explode('|', $component['name']);
+                if (count($info) && $info[0] == 'tax') {
+                    $tax_id = $info[1];
+                    break;
+                }
+            }
+
+            $quantity = $line_item_wrapper->quantity->value();
+            $tax      = $tax_id && variable_get('yamoney_api_kassa_tax_'.$tax_id)
+                ? variable_get('yamoney_api_kassa_tax_'.$tax_id)
+                : YAMONEY_API_DEFAULT_TAX_RATE_ID;
+            $amount   = commerce_currency_amount_to_decimal(
+                $product->commerce_price['und'][0]['amount'],
+                $product->commerce_price['und'][0]['currency_code']
+            );
+
+            $builder->addReceiptItem($product->title, $amount, $quantity, $tax);
+        }
+
+        if ($line_item_wrapper->value()->type == 'shipping') {
+            $shipping = $line_item_wrapper->value();
+            $amount   = commerce_currency_amount_to_decimal(
+                $shipping->commerce_total['und'][0]['amount'],
+                $shipping->commerce_total['und'][0]['currency_code']
+            );
+            $builder->addReceiptShipping('Доставка', $amount, YAMONEY_API_DEFAULT_TAX_RATE_ID);
+        }
+    }
 }
 
 /**
@@ -437,7 +452,6 @@ function ya_commerce_api_redirect_form($form, &$form_state, $order, $payment_met
 
     $transaction           = new YAMoneyApiTransaction();
     $transaction->uid      = isset($user->uid) ? $user->uid : 0;
-    $transaction->uid      = isset($user->uid) ? $user->uid : '';
     $transaction->amount   = $amount;
     $transaction->mail     = isset($user->mail) ? $user->mail : '';
     $transaction->order_id = $order->order_id;
@@ -733,4 +747,89 @@ function ya_commerce_api_create_description($orderInfo)
     $description = strtr($descriptionTemplate, $replace);
 
     return (string)mb_substr($description, 0, Payment::MAX_LENGTH_DESCRIPTION);
+}
+
+/**
+ * @param $paymentId
+ * @return mixed|null
+ */
+function ya_commerce_api_commerce_payment_transaction_load($paymentId)
+{
+    $transactions = commerce_payment_transaction_load_multiple(
+        array(),
+        array('remote_id' => $paymentId)
+    );
+
+    return !empty($transactions) ? array_shift($transactions) : null;
+}
+
+/**
+ * @param \YandexCheckout\Model\PaymentInterface $payment
+ * @param $order
+ */
+function ya_commerce_api_capture_payment($payment, $order)
+{
+    $apiClient = yamoney_api__common__get_api_client();
+    $response  = null;
+    try {
+        $builder = CreateCaptureRequest::builder();
+
+        $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
+        $currency_code = $order_wrapper->commerce_order_total->currency_code->value();
+        $amount        = $order_wrapper->commerce_order_total->amount->value();
+        $amount        = round(commerce_currency_amount_to_decimal($amount, $currency_code), 2);
+
+        $builder->setAmount($amount);
+        ya_commerce_api_set_receipt_if_needed($builder, $order, $order_wrapper);
+
+        $request  = $builder->build();
+        $response = $apiClient->capturePayment($request, $payment->getId());
+    } catch (\Exception $e) {
+        $this->module->log('error', 'Capture error: '.$e->getMessage());
+        $response = $payment;
+    }
+    yamoney_api_common_check_value_is_not_empty($response, '400 Bad Request', 'Empty payment info');
+    if ($response->getStatus() !== \YandexCheckout\Model\PaymentStatus::SUCCEEDED) {
+        $this->module->log('error', 'Capture payment error: capture failed');
+        return;
+    }
+
+    yamoney_api_update_transaction_status($response->getId(), $response->getStatus());
+
+    $transaction = ya_commerce_api_commerce_payment_transaction_load($response->getId());
+    if ($transaction) {
+        $transaction->message = t('Вы подтвердили платёж в Яндекс.Кассе.');
+        commerce_payment_transaction_save($transaction);
+    }
+
+    echo "OK";
+    exit();
+}
+
+/**
+ * @param string $paymentId
+ * @param $order
+ */
+function ya_commerce_api_cancel_payment($paymentId, $order)
+{
+    $apiClient = yamoney_api__common__get_api_client();
+    $response  = $apiClient->cancelPayment($paymentId);
+    if (!$response || $response->getStatus() !== PaymentStatus::CANCELED) {
+        $this->module->log('error', 'Cancel payment error: cancel failed');
+        return;
+    }
+
+    commerce_order_status_update($order, YAMONEY_API_ORDER_STATUS_CANCELED);
+    yamoney_api_update_transaction_status($paymentId, PaymentStatus::CANCELED);
+
+    $transaction = ya_commerce_api_commerce_payment_transaction_load($paymentId);
+    if ($transaction) {
+        $transaction->status        = COMMERCE_PAYMENT_STATUS_FAILURE;
+        $transaction->remote_status = $response->getStatus();
+        $transaction->message       = t('Вы отменили платёж в Яндекс.Кассе. Деньги вернутся клиенту.');
+        commerce_payment_transaction_save($transaction);
+    }
+
+    echo "OK";
+    exit();
 }
