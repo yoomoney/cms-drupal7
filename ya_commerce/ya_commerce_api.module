@@ -227,6 +227,9 @@ function ya_commerce_api_submit_form_validate(
     $form_parents = array()
 ) {
     if (variable_get('yamoney_api_shop') == 1) {
+        if (!isset($pane_values['payment_method'])) {
+            return true;
+        }
         if ($pane_values['payment_method'] == 'alfabank') {
             if (isset($_POST['alfabank_login']) && $_POST['alfabank_login'] !== '') {
                 return true;
