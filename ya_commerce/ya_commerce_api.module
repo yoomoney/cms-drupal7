@@ -317,7 +317,7 @@ function ya_commerce_api_submit_form_submit($payment_method, $pane_form, $pane_v
                 $ymTransaction           = new YAMoneyApiTransaction();
                 $ymTransaction->uid      = isset($user->uid) ? $user->uid : 0;
                 $ymTransaction->amount   = $amount;
-                $ymTransaction->mail     = isset($user->mail) ? $user->mail : $order->primary_email;
+                $ymTransaction->mail     = isset($user->mail) ? $user->mail : $order->mail;
                 $ymTransaction->order_id = $order->order_id;
                 $ymTransaction->payment_id = $response->getId();
                 $ymTransaction->status   = $response->getStatus();
