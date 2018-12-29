@@ -206,6 +206,98 @@ function yamoney_api_admin_settings()
                     '#markup' => '</div>',
                 );
             }
+
+            $form['yamoney_api_kassa_tab']['yamoney_kassa_payment_mode'] = array(
+                '#type' => 'select',
+                '#title' => t('Признак способа расчета'),
+                '#options' => array(
+                    'full_prepayment'    => 'Полная предоплата (full_prepayment)',
+                    'partial_prepayment' => 'Частичная предоплата (partial_prepayment)',
+                    'advance'            => 'Аванс (advance)',
+                    'full_payment'       => 'Полный расчет (full_payment)',
+                    'partial_payment'    => 'Частичный расчет и кредит (partial_payment)',
+                    'credit'             => 'Кредит (credit)',
+                    'credit_payment'     => 'Выплата по кредиту (credit_payment)',
+                ),
+                '#default_value' => variable_get('yamoney_kassa_payment_mode'),
+                '#states' => array(
+                    'invisible' => array(
+                        ':input[name="yamoney_send_check"]' => array('value' => '0'),
+                    ),
+                )
+            );
+
+            $form['yamoney_api_kassa_tab']['yamoney_kassa_payment_subject'] = array(
+                '#type' => 'select',
+                '#title' => t('Признак предмета расчета'),
+                '#options' => array(
+                    'commodity'             => 'Товар (commodity)',
+                    'excise'                => 'Подакцизный товар (excise)',
+                    'job'                   => 'Работа (job)',
+                    'service'               => 'Услуга (service)',
+                    'gambling_bet'          => 'Ставка в азартной игре (gambling_bet)',
+                    'gambling_prize'        => 'Выигрыш в азартной игре (gambling_prize)',
+                    'lottery'               => 'Лотерейный билет (lottery)',
+                    'lottery_prize'         => 'Выигрыш в лотерею (lottery_prize)',
+                    'intellectual_activity' => 'Результаты интеллектуальной деятельности (intellectual_activity)',
+                    'payment'               => 'Платеж (payment)',
+                    'agent_commission'      => 'Агентское вознаграждение (agent_commission)',
+                    'composite'             => 'Несколько вариантов (composite)',
+                    'another'               => 'Другое (another)',
+                ),
+                '#default_value' => variable_get('yamoney_kassa_payment_subject'),
+                '#states' => array(
+                    'invisible' => array(
+                        ':input[name="yamoney_send_check"]' => array('value' => '0'),
+                    ),
+                )
+            );
+
+            $form['yamoney_api_kassa_tab']['yamoney_kassa_delivery_payment_mode'] = array(
+                '#type' => 'select',
+                '#title' => t('Признак способа расчета для доставки'),
+                '#options' => array(
+                    'full_prepayment'    => 'Полная предоплата (full_prepayment)',
+                    'partial_prepayment' => 'Частичная предоплата (partial_prepayment)',
+                    'advance'            => 'Аванс (advance)',
+                    'full_payment'       => 'Полный расчет (full_payment)',
+                    'partial_payment'    => 'Частичный расчет и кредит (partial_payment)',
+                    'credit'             => 'Кредит (credit)',
+                    'credit_payment'     => 'Выплата по кредиту (credit_payment)',
+                ),
+                '#default_value' => variable_get('yamoney_kassa_delivery_payment_mode'),
+                '#states' => array(
+                    'invisible' => array(
+                        ':input[name="yamoney_send_check"]' => array('value' => '0'),
+                    ),
+                )
+            );
+
+            $form['yamoney_api_kassa_tab']['yamoney_kassa_delivery_payment_subject'] = array(
+                '#type' => 'select',
+                '#title' => t('Признак предмета расчета для доставки'),
+                '#options' => array(
+                    'commodity'             => 'Товар (commodity)',
+                    'excise'                => 'Подакцизный товар (excise)',
+                    'job'                   => 'Работа (job)',
+                    'service'               => 'Услуга (service)',
+                    'gambling_bet'          => 'Ставка в азартной игре (gambling_bet)',
+                    'gambling_prize'        => 'Выигрыш в азартной игре (gambling_prize)',
+                    'lottery'               => 'Лотерейный билет (lottery)',
+                    'lottery_prize'         => 'Выигрыш в лотерею (lottery_prize)',
+                    'intellectual_activity' => 'Результаты интеллектуальной деятельности (intellectual_activity)',
+                    'payment'               => 'Платеж (payment)',
+                    'agent_commission'      => 'Агентское вознаграждение (agent_commission)',
+                    'composite'             => 'Несколько вариантов (composite)',
+                    'another'               => 'Другое (another)',
+                ),
+                '#default_value' => variable_get('yamoney_kassa_delivery_payment_subject'),
+                '#states' => array(
+                    'invisible' => array(
+                        ':input[name="yamoney_send_check"]' => array('value' => '0'),
+                    ),
+                )
+            );
         }
     }
 
@@ -267,6 +359,98 @@ function yamoney_api_admin_settings()
                     '#markup' => '</div>',
                 );
             }
+
+            $form['yamoney_api_kassa_tab']['yamoney_kassa_payment_mode'] = array(
+                '#type' => 'select',
+                '#title' => t('Признак способа расчета'),
+                '#options' => array(
+                    'full_prepayment'    => 'Полная предоплата (full_prepayment)',
+                    'partial_prepayment' => 'Частичная предоплата (partial_prepayment)',
+                    'advance'            => 'Аванс (advance)',
+                    'full_payment'       => 'Полный расчет (full_payment)',
+                    'partial_payment'    => 'Частичный расчет и кредит (partial_payment)',
+                    'credit'             => 'Кредит (credit)',
+                    'credit_payment'     => 'Выплата по кредиту (credit_payment)',
+                ),
+                '#default_value' => variable_get('yamoney_kassa_payment_mode'),
+                '#states' => array(
+                    'invisible' => array(
+                        ':input[name="yamoney_send_check"]' => array('value' => '0'),
+                    ),
+                )
+            );
+
+            $form['yamoney_api_kassa_tab']['yamoney_kassa_payment_subject'] = array(
+                '#type' => 'select',
+                '#title' => t('Признак предмета расчета'),
+                '#options' => array(
+                    'commodity'             => 'Товар (commodity)',
+                    'excise'                => 'Подакцизный товар (excise)',
+                    'job'                   => 'Работа (job)',
+                    'service'               => 'Услуга (service)',
+                    'gambling_bet'          => 'Ставка в азартной игре (gambling_bet)',
+                    'gambling_prize'        => 'Выигрыш в азартной игре (gambling_prize)',
+                    'lottery'               => 'Лотерейный билет (lottery)',
+                    'lottery_prize'         => 'Выигрыш в лотерею (lottery_prize)',
+                    'intellectual_activity' => 'Результаты интеллектуальной деятельности (intellectual_activity)',
+                    'payment'               => 'Платеж (payment)',
+                    'agent_commission'      => 'Агентское вознаграждение (agent_commission)',
+                    'composite'             => 'Несколько вариантов (composite)',
+                    'another'               => 'Другое (another)',
+                ),
+                '#default_value' => variable_get('yamoney_kassa_payment_subject'),
+                '#states' => array(
+                    'invisible' => array(
+                        ':input[name="yamoney_send_check"]' => array('value' => '0'),
+                    ),
+                )
+            );
+
+            $form['yamoney_api_kassa_tab']['yamoney_kassa_delivery_payment_mode'] = array(
+                '#type' => 'select',
+                '#title' => t('Признак способа расчета для доставки'),
+                '#options' => array(
+                    'full_prepayment'    => 'Полная предоплата (full_prepayment)',
+                    'partial_prepayment' => 'Частичная предоплата (partial_prepayment)',
+                    'advance'            => 'Аванс (advance)',
+                    'full_payment'       => 'Полный расчет (full_payment)',
+                    'partial_payment'    => 'Частичный расчет и кредит (partial_payment)',
+                    'credit'             => 'Кредит (credit)',
+                    'credit_payment'     => 'Выплата по кредиту (credit_payment)',
+                ),
+                '#default_value' => variable_get('yamoney_kassa_delivery_payment_mode'),
+                '#states' => array(
+                    'invisible' => array(
+                        ':input[name="yamoney_send_check"]' => array('value' => '0'),
+                    ),
+                )
+            );
+
+            $form['yamoney_api_kassa_tab']['yamoney_kassa_delivery_payment_subject'] = array(
+                '#type' => 'select',
+                '#title' => t('Признак предмета расчета для доставки'),
+                '#options' => array(
+                    'commodity'             => 'Товар (commodity)',
+                    'excise'                => 'Подакцизный товар (excise)',
+                    'job'                   => 'Работа (job)',
+                    'service'               => 'Услуга (service)',
+                    'gambling_bet'          => 'Ставка в азартной игре (gambling_bet)',
+                    'gambling_prize'        => 'Выигрыш в азартной игре (gambling_prize)',
+                    'lottery'               => 'Лотерейный билет (lottery)',
+                    'lottery_prize'         => 'Выигрыш в лотерею (lottery_prize)',
+                    'intellectual_activity' => 'Результаты интеллектуальной деятельности (intellectual_activity)',
+                    'payment'               => 'Платеж (payment)',
+                    'agent_commission'      => 'Агентское вознаграждение (agent_commission)',
+                    'composite'             => 'Несколько вариантов (composite)',
+                    'another'               => 'Другое (another)',
+                ),
+                '#default_value' => variable_get('yamoney_kassa_delivery_payment_subject'),
+                '#states' => array(
+                    'invisible' => array(
+                        ':input[name="yamoney_send_check"]' => array('value' => '0'),
+                    ),
+                )
+            );
         }
     }
 
