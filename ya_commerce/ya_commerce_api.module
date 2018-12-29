@@ -79,16 +79,16 @@ function ya_commerce_api_submit_form($payment_method, $pane_values, $checkout_pa
 {
     $form = array();
 
-    $disabled = false;
-    $methods  = yamoney_api_get_enabled_payment_methods();
-    $wrapper = entity_metadata_wrapper('commerce_order', $order);
+    $disabled    = false;
+    $methods     = yamoney_api_get_enabled_payment_methods();
+    $wrapper     = entity_metadata_wrapper('commerce_order', $order);
     $order_total = $wrapper->commerce_order_total->value();
-    $amount = commerce_currency_amount_to_decimal($order_total['amount'], $order_total['currency_code']);
+    $amount      = commerce_currency_amount_to_decimal($order_total['amount'], $order_total['currency_code']);
     if ($amount < INSTALLMENTS_MIN_AMOUNT) {
         unset($methods[\YandexCheckout\Model\PaymentMethodType::INSTALLMENTS]);
     }
     if (isset($methods[\YandexCheckout\Model\PaymentMethodType::INSTALLMENTS])) {
-        $shopId = variable_get('yamoney_api_shop_id');
+        $shopId             = variable_get('yamoney_api_shop_id');
         $monthlyInstallment = InstallmentsApi::creditPreSchedule($shopId, $amount);
         if (!empty($monthlyInstallment['amount'])) {
             $methods[\YandexCheckout\Model\PaymentMethodType::INSTALLMENTS] = sprintf(
@@ -270,6 +270,7 @@ function ya_commerce_api_submit_form_validate(
 
 /**
  * Payment method callback: checkout form submission.
+ *
  * @param $payment_method
  * @param $pane_form
  * @param $pane_values
@@ -298,7 +299,8 @@ function ya_commerce_api_submit_form_submit($payment_method, $pane_form, $pane_v
             };
         }
 
-        $builder        = ya_commerce_api_get_create_payment_request_builder($order, $amount, $paymentMethod, $order_wrapper);
+        $builder        = ya_commerce_api_get_create_payment_request_builder($order, $amount, $paymentMethod,
+            $order_wrapper);
         $paymentRequest = $builder->build();
         $serializer     = new CreatePaymentRequestSerializer();
         $serializedData = $serializer->serialize($paymentRequest);
@@ -306,7 +308,8 @@ function ya_commerce_api_submit_form_submit($payment_method, $pane_form, $pane_v
         try {
             $response = $apiClient->createPayment($paymentRequest);
             if ($response && $response->status !== PaymentStatus::CANCELED) {
-                $transaction = commerce_payment_transaction_new($payment_method['instance_id'], $order->order_id);
+                $transaction                = commerce_payment_transaction_new($payment_method['instance_id'],
+                    $order->order_id);
                 $transaction->instance_id   = $payment_method['instance_id'];
                 $transaction->remote_id     = $response->id;
                 $transaction->amount        = intval($amount) * 100;
@@ -314,13 +317,13 @@ function ya_commerce_api_submit_form_submit($payment_method, $pane_form, $pane_v
                 $transaction->status        = COMMERCE_PAYMENT_STATUS_PENDING;
                 $transaction->remote_status = $response->getStatus();
                 commerce_order_status_update($order, YAMONEY_API_ORDER_STATUS_PENDING);
-                $ymTransaction           = new YAMoneyApiTransaction();
-                $ymTransaction->uid      = isset($user->uid) ? $user->uid : 0;
-                $ymTransaction->amount   = $amount;
-                $ymTransaction->mail     = isset($user->mail) ? $user->mail : $order->mail;
-                $ymTransaction->order_id = $order->order_id;
+                $ymTransaction             = new YAMoneyApiTransaction();
+                $ymTransaction->uid        = isset($user->uid) ? $user->uid : 0;
+                $ymTransaction->amount     = $amount;
+                $ymTransaction->mail       = isset($user->mail) ? $user->mail : $order->mail;
+                $ymTransaction->order_id   = $order->order_id;
                 $ymTransaction->payment_id = $response->getId();
-                $ymTransaction->status   = $response->getStatus();
+                $ymTransaction->status     = $response->getStatus();
                 if (commerce_payment_transaction_save($transaction) && commerce_order_save($order)
                     && yamoney_api_transaction_save($ymTransaction)
                 ) {
@@ -425,7 +428,9 @@ function ya_commerce_api_set_receipt_if_needed($builder, $order, $order_wrapper)
                 $product->commerce_price['und'][0]['currency_code']
             );
 
-            $builder->addReceiptItem($product->title, $amount, $quantity, $tax);
+            $builder->addReceiptItem($product->title, $amount, $quantity, $tax,
+                variable_get('yamoney_kassa_payment_mode'),
+                variable_get('yamoney_kassa_payment_subject'));
         }
 
         if ($line_item_wrapper->value()->type == 'shipping') {
@@ -434,7 +439,9 @@ function ya_commerce_api_set_receipt_if_needed($builder, $order, $order_wrapper)
                 $shipping->commerce_total['und'][0]['amount'],
                 $shipping->commerce_total['und'][0]['currency_code']
             );
-            $builder->addReceiptShipping('Доставка', $amount, YAMONEY_API_DEFAULT_TAX_RATE_ID);
+            $builder->addReceiptShipping('Доставка', $amount, YAMONEY_API_DEFAULT_TAX_RATE_ID,
+                variable_get('yamoney_kassa_delivery_payment_mode'),
+                variable_get('yamoney_kassa_delivery_payment_subject'));
         }
     }
 }
@@ -706,12 +713,12 @@ function theme_ya_commerce_api_form_radio_element_external($variables)
 
     if ($element['#value'] == 'alfabank') {
         $output .= '<div>';
-        $output .= '<div>' . t('Specify the login, and we\'ll send the bill in Alfa-Click. All you have do after that is confirm the payment online at the bank\'s website.'). '</div>';
+        $output .= '<div>'.t('Specify the login, and we\'ll send the bill in Alfa-Click. All you have do after that is confirm the payment online at the bank\'s website.').'</div>';
         $output .= '<input type="text" name="alfabank_login">';
         $output .= '</div>';
     } elseif ($element['#value'] == 'qiwi') {
         $output .= '<div>';
-        $output .= '<div>'.  t('Phone number linked to Qiwi Wallet').'</div>';
+        $output .= '<div>'.t('Phone number linked to Qiwi Wallet').'</div>';
         $output .= '<input type="text" name="qiwi_phone">';
         $output .= '</div>';
     }
@@ -734,6 +741,7 @@ function ajax_payment_method_form_callback(&$form, &$form_state)
 
 /**
  * @param $orderInfo
+ *
  * @return bool|string
  */
 function ya_commerce_api_create_description($orderInfo)
@@ -754,6 +762,7 @@ function ya_commerce_api_create_description($orderInfo)
 
 /**
  * @param $paymentId
+ *
  * @return mixed|null
  */
 function ya_commerce_api_commerce_payment_transaction_load($paymentId)
@@ -794,6 +803,7 @@ function ya_commerce_api_capture_payment($payment, $order)
     yamoney_api_common_check_value_is_not_empty($response, '400 Bad Request', 'Empty payment info');
     if ($response->getStatus() !== \YandexCheckout\Model\PaymentStatus::SUCCEEDED) {
         $this->module->log('error', 'Capture payment error: capture failed');
+
         return;
     }
 
@@ -819,6 +829,7 @@ function ya_commerce_api_cancel_payment($paymentId, $order)
     $response  = $apiClient->cancelPayment($paymentId);
     if (!$response || $response->getStatus() !== PaymentStatus::CANCELED) {
         $this->module->log('error', 'Cancel payment error: cancel failed');
+
         return;
     }
 

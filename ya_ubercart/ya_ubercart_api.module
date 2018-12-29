@@ -251,7 +251,9 @@ function ya_ubercart_api_set_receipt_if_needed($builder, $order)
             ) : YAMONEY_API_DEFAULT_TAX_RATE_ID);
             list($amountTax, $suffixes) = uc_taxes_get_included_tax($product, $order);
             $amount = $product->price + ($amountTax ? $amountTax : 0);
-            $builder->addReceiptItem($product->title, $amount, $product->qty, $tax);
+            $builder->addReceiptItem($product->title, $amount, $product->qty, $tax,
+                variable_get('yamoney_kassa_payment_mode'),
+                variable_get('yamoney_kassa_payment_subject'));
         }
 
         foreach ($order->line_items as $item) {
@@ -264,7 +266,9 @@ function ya_ubercart_api_set_receipt_if_needed($builder, $order)
                 'yamoney_api_kassa_tax_'.$tax_id
             ) : YAMONEY_API_DEFAULT_TAX_RATE_ID);
 
-            $builder->addReceiptShipping($item['title'], $amount, $tax);
+            $builder->addReceiptShipping($item['title'], $amount, $tax,
+                variable_get('yamoney_kassa_delivery_payment_mode'),
+                variable_get('yamoney_kassa_delivery_payment_subject'));
         }
     }
 }
@@ -311,7 +315,7 @@ function uc_payment_method_ya_ubercart_api($op, &$order, $form = array(), &$form
                 unset($methods[\YandexCheckout\Model\PaymentMethodType::INSTALLMENTS]);
             }
             if (isset($order->order_total) && isset($methods[\YandexCheckout\Model\PaymentMethodType::INSTALLMENTS])) {
-                $shopId = variable_get('yamoney_api_shop_id');
+                $shopId             = variable_get('yamoney_api_shop_id');
                 $monthlyInstallment = InstallmentsApi::creditPreSchedule($shopId, $order->order_total);
                 if (!empty($monthlyInstallment['amount'])) {
                     $methods[\YandexCheckout\Model\PaymentMethodType::INSTALLMENTS] = sprintf(
@@ -352,6 +356,7 @@ function uc_payment_method_ya_ubercart_api($op, &$order, $form = array(), &$form
                     ),
                 );
                 unset($_SESSION['pay_method']);
+
                 return $form;
             }
             if (variable_get('yamoney_api_billing_enable', 0)) {
@@ -545,7 +550,7 @@ function theme_ya_ubercart_api_form_radio_element_external($variables)
 
     if ($element['#value'] == 'alfabank') {
         $output .= '<div>';
-        $output .= '<div>'. t('Specify the login, and we\'ll send the bill in Alfa-Click. All you have do after that is confirm the payment online at the bank\'s website.').'</div>';
+        $output .= '<div>'.t('Specify the login, and we\'ll send the bill in Alfa-Click. All you have do after that is confirm the payment online at the bank\'s website.').'</div>';
         $output .= '<input type="text" name="alfabank_login">';
         $output .= '</div>';
     } elseif ($element['#value'] == 'qiwi') {
@@ -572,6 +577,7 @@ function ajax_payment_method_form_callback($form, $form_state)
 
 /**
  * @param $orderInfo
+ *
  * @return bool|string
  */
 function ya_ubercart_api_create_description($orderInfo)
@@ -613,6 +619,7 @@ function ya_ubercart_api_capture_payment($payment, $order)
     yamoney_api_common_check_value_is_not_empty($response, '400 Bad Request', 'Empty payment info');
     if ($response->getStatus() !== \YandexCheckout\Model\PaymentStatus::SUCCEEDED) {
         $this->module->log('error', 'Capture payment error: capture failed');
+
         return;
     }
     yamoney_api_update_transaction_status($response->getId(), $response->getStatus());
@@ -632,6 +639,7 @@ function ya_ubercart_api_cancel_payment($paymentId, $order)
     $response  = $apiClient->cancelPayment($paymentId);
     if (!$response || $response->getStatus() !== PaymentStatus::CANCELED) {
         $this->module->log('error', 'Cancel payment error: cancel failed');
+
         return;
     }
 
