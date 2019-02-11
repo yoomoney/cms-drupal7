@@ -2,5 +2,5 @@ name = Yandex.Money Core 2.0
 description = Yandex.Money 2.0 core module.
 package = Yandex.Money 2.0
 core = 7.x
-version = 1.0.14
+version = 1.0.15
 configure = admin/config/system/yamoney_api

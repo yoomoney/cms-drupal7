@@ -307,7 +307,7 @@ function yamoney_api_create_transaction_table($table_rows) {
         $module = '';
         if (module_exists('commerce')
             && commerce_order_load($row['order_id'])
-            && ya_commerce_api_commerce_payment_transaction_load($row['payment_id'])
+            && yaCommerceApiPaymentTransactioLoad($row['payment_id'])
         ) {
             $module          = 'commerce';
             $row['order_id'] = l($row['order_id'], 'admin/commerce/orders/'.$orderId);
