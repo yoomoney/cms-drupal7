@@ -16,7 +16,7 @@ define('YAMONEY_API_CHECK_RESULT_CODE_ERROR_MD5', 1);
 define('YAMONEY_API_CHECK_RESULT_CODE_ERROR_CUSTOM', 100);
 define('YAMONEY_API_CHECK_RESULT_CODE_ERROR_REQUEST', 200);
 define('YAMONEY_API_DEFAULT_TAX_RATE_ID', 1);
-define('YAMONEY_MODULE_VERSION', '1.0.14');
+define('YAMONEY_MODULE_VERSION', '1.0.15');
 define('YAMONEY_API_DEFAULT_PAYMENT_METHOD', \YandexCheckout\Model\PaymentMethodType::BANK_CARD);
 define('QUICK_API_PAY_VERSION', 2);
 define('INSTALLMENTS_MIN_AMOUNT', 3000);
@@ -319,7 +319,7 @@ function yamoney_api_commerce_notify()
 
     $notification = yamoney_api_common_get_payment_info_from_input();
     $paymentId = $notification->getObject()->getId();
-    $transaction = ya_commerce_api_commerce_payment_transaction_load($paymentId);
+    $transaction = yaCommerceApiPaymentTransactioLoad($paymentId);
     $order = commerce_order_load($transaction->order_id);
     yamoney_api_common_check_value_is_not_empty($order, '404 Not Found', 'Order not found');
 

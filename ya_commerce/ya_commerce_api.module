@@ -765,7 +765,7 @@ function ya_commerce_api_create_description($orderInfo)
  *
  * @return mixed|null
  */
-function ya_commerce_api_commerce_payment_transaction_load($paymentId)
+function yaCommerceApiPaymentTransactioLoad($paymentId)
 {
     $transactions = commerce_payment_transaction_load_multiple(
         array(),
@@ -809,7 +809,7 @@ function ya_commerce_api_capture_payment($payment, $order)
 
     yamoney_api_update_transaction_status($response->getId(), $response->getStatus());
 
-    $transaction = ya_commerce_api_commerce_payment_transaction_load($response->getId());
+    $transaction = yaCommerceApiPaymentTransactioLoad($response->getId());
     if ($transaction) {
         $transaction->message = t('Вы подтвердили платёж в Яндекс.Кассе.');
         commerce_payment_transaction_save($transaction);
@@ -836,7 +836,7 @@ function ya_commerce_api_cancel_payment($paymentId, $order)
     commerce_order_status_update($order, YAMONEY_API_ORDER_STATUS_CANCELED);
     yamoney_api_update_transaction_status($paymentId, PaymentStatus::CANCELED);
 
-    $transaction = ya_commerce_api_commerce_payment_transaction_load($paymentId);
+    $transaction = yaCommerceApiPaymentTransactioLoad($paymentId);
     if ($transaction) {
         $transaction->status        = COMMERCE_PAYMENT_STATUS_FAILURE;
         $transaction->remote_status = $response->getStatus();
