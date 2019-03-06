@@ -16,7 +16,7 @@ define('YAMONEY_API_CHECK_RESULT_CODE_ERROR_MD5', 1);
 define('YAMONEY_API_CHECK_RESULT_CODE_ERROR_CUSTOM', 100);
 define('YAMONEY_API_CHECK_RESULT_CODE_ERROR_REQUEST', 200);
 define('YAMONEY_API_DEFAULT_TAX_RATE_ID', 1);
-define('YAMONEY_MODULE_VERSION', '1.0.15');
+define('YAMONEY_MODULE_VERSION', '1.0.16');
 define('YAMONEY_API_DEFAULT_PAYMENT_METHOD', \YandexCheckout\Model\PaymentMethodType::BANK_CARD);
 define('QUICK_API_PAY_VERSION', 2);
 define('INSTALLMENTS_MIN_AMOUNT', 3000);
@@ -63,7 +63,7 @@ function yamoney_api_menu()
     $items = array();
 
     // Secret transaction status url
-    $items['yamoney_api/check_wallet']  = array(
+    $items['yamoney_api/check_wallet'] = array(
         'page callback'   => 'yamoney_check_wallet',
         'access callback' => 'yamoney_check_server_ip',
         'type'            => MENU_CALLBACK,
@@ -161,13 +161,14 @@ function yamoney_api__common__get_api_client()
     $apiClient    = new Client();
     $apiClient->setAuth($shopId, $shopPassword);
     $apiClient->setLogger(new YandexMoneyLogger());
+
     return $apiClient;
 }
 
 function yamoney_api_ubercart_return_page()
 {
     YandexMoneyLogger::info('Return url init ubercart');
-    $failUrl = 'yamoney_api/fail';
+    $failUrl    = 'yamoney_api/fail';
     $successUrl = 'yamoney_api/success';
 
     $params = drupal_get_query_parameters();
@@ -178,17 +179,17 @@ function yamoney_api_ubercart_return_page()
 
     $order = uc_order_load($params['orderId']);
     if (!$order) {
-        YandexMoneyLogger::info('Payment failed. Can not load oder id #' . $params['orderId']);
+        YandexMoneyLogger::info('Payment failed. Can not load oder id #'.$params['orderId']);
         drupal_goto($failUrl);
     }
-    YandexMoneyLogger::info('Order: ' . json_encode($order));
+    YandexMoneyLogger::info('Order: '.json_encode($order));
 
     $transaction = yamoney_api_transaction_load_by_order($order->order_id);
     if (!$transaction) {
-        YandexMoneyLogger::info('Payment failed. Transaction not found for order id #' . $params['orderId']);
+        YandexMoneyLogger::info('Payment failed. Transaction not found for order id #'.$params['orderId']);
         drupal_goto($failUrl);
     }
-    YandexMoneyLogger::info('Transaction: ' . json_encode($transaction));
+    YandexMoneyLogger::info('Transaction: '.json_encode($transaction));
 
     $apiClient = yamoney_api__common__get_api_client();
 
@@ -197,7 +198,7 @@ function yamoney_api_ubercart_return_page()
     try {
         $payment = $apiClient->getPaymentInfo($paymentId);
         if (!$payment) {
-            YandexMoneyLogger::info('Payment failed. Empty payment info. PaymentId #' . $paymentId);
+            YandexMoneyLogger::info('Payment failed. Empty payment info. PaymentId #'.$paymentId);
             drupal_goto($failUrl);
         }
         $url = $payment->getPaid() ? $successUrl : $failUrl;
@@ -212,7 +213,7 @@ function yamoney_api_ubercart_return_page()
 function yamoney_api_commerce_return_page()
 {
     YandexMoneyLogger::info('Return url init');
-    $failUrl = 'yamoney_api/fail';
+    $failUrl    = 'yamoney_api/fail';
     $successUrl = 'yamoney_api/success';
 
     $params = drupal_get_query_parameters();
@@ -222,14 +223,14 @@ function yamoney_api_commerce_return_page()
     }
     $order = commerce_order_load($params['orderId']);
     if (!$order) {
-        YandexMoneyLogger::info('Payment failed. Can not load oder id #' . $params['orderId']);
+        YandexMoneyLogger::info('Payment failed. Can not load oder id #'.$params['orderId']);
         drupal_goto($failUrl);
     }
     $transactions = commerce_payment_transaction_load_multiple(array(), array('order_id' => $order->order_id));
     $transaction  = !empty($transactions) ? array_shift($transactions) : null;
 
     if (!$transaction) {
-        YandexMoneyLogger::info('Payment failed. Transaction not found for order id #' . $params['orderId']);
+        YandexMoneyLogger::info('Payment failed. Transaction not found for order id #'.$params['orderId']);
         drupal_goto($failUrl);
     }
     $apiClient = yamoney_api__common__get_api_client();
@@ -239,7 +240,7 @@ function yamoney_api_commerce_return_page()
     try {
         $payment = $apiClient->getPaymentInfo($paymentId);
         if (!$payment) {
-            YandexMoneyLogger::info('Payment failed. Empty payment info. PaymentId #' . $paymentId);
+            YandexMoneyLogger::info('Payment failed. Empty payment info. PaymentId #'.$paymentId);
             drupal_goto($failUrl);
         }
 
@@ -259,7 +260,7 @@ function yamoney_api_ubercart_notify()
         exit();
     }
     $notification = yamoney_api_common_get_payment_info_from_input();
-    $paymentId = $notification->getObject()->getId();
+    $paymentId    = $notification->getObject()->getId();
 
     $apiClient = yamoney_api__common__get_api_client();
 
@@ -287,11 +288,12 @@ function yamoney_api_ubercart_notify()
         ) {
             YandexMoneyLogger::info('Hold payment for order: '.$order->order_id);
             uc_order_update_status($order->order_id, YAMONEY_API_ORDER_STATUS_PROCESSING);
-            uc_order_comment_save($order->order_id, 0, sprintf(t('Поступил новый платёж. Он ожидает подтверждения до %1$s, после чего автоматически отменится'),
-                $payment->getExpiresAt()->format('d.m.Y H:i')));
+            uc_order_comment_save($order->order_id, 0,
+                sprintf(t('Поступил новый платёж. Он ожидает подтверждения до %1$s, после чего автоматически отменится'),
+                    $payment->getExpiresAt()->format('d.m.Y H:i')));
         } else {
             $captureRequest = CreateCaptureRequest::builder()->setAmount($payment->getAmount())->build();
-            $payment = $apiClient->capturePayment($captureRequest, $payment->getId());
+            $payment        = $apiClient->capturePayment($captureRequest, $payment->getId());
             yamoney_api_common_check_value_is_not_empty($payment, '400 Bad Request', 'Empty payment info');
         }
         yamoney_api_update_transaction_status($paymentId, $payment->getStatus());
@@ -318,9 +320,9 @@ function yamoney_api_commerce_notify()
     }
 
     $notification = yamoney_api_common_get_payment_info_from_input();
-    $paymentId = $notification->getObject()->getId();
-    $transaction = yaCommerceApiPaymentTransactioLoad($paymentId);
-    $order = commerce_order_load($transaction->order_id);
+    $paymentId    = $notification->getObject()->getId();
+    $transaction  = yaCommerceApiPaymentTransactioLoad($paymentId);
+    $order        = commerce_order_load($transaction->order_id);
     yamoney_api_common_check_value_is_not_empty($order, '404 Not Found', 'Order not found');
 
     $apiClient = yamoney_api__common__get_api_client();
@@ -375,7 +377,7 @@ function yamoney_api_commerce_notify()
 function yamoney_api_common_get_payment_info_from_input()
 {
     $body = @file_get_contents('php://input');
-    YandexMoneyLogger::info('Notification: ' . $body);
+    YandexMoneyLogger::info('Notification: '.$body);
     $callbackParams = json_decode($body, true);
     yamoney_api_common_check_json_last_error();
 
@@ -384,7 +386,7 @@ function yamoney_api_common_get_payment_info_from_input()
             ? new NotificationSucceeded($callbackParams)
             : new NotificationWaitingForCapture($callbackParams);
     } catch (\Exception $e) {
-        YandexMoneyLogger::error('Invalid notification object - ' . $e->getMessage());
+        YandexMoneyLogger::error('Invalid notification object - '.$e->getMessage());
         header('HTTP/1.1 400 Invalid object in body');
         exit();
     }
@@ -464,8 +466,8 @@ function yamoney_api_common_check_value_is_not_empty($value, $status, $logMessag
 {
     if (!$value) {
         YandexMoneyLogger::error($logMessage);
-        header('HTTP/1.1 ' . $status);
-        header('Status: ' . $status);
+        header('HTTP/1.1 '.$status);
+        header('Status: '.$status);
         exit();
     }
 }
@@ -667,6 +669,7 @@ function yamoney_api_get_payment_methods()
             'Payment via Sberbank: payment by text messages or Sberbank Online'
         ),
         \YandexCheckout\Model\PaymentMethodType::QIWI         => t('Payment via QIWI Wallet'),
+        \YandexCheckout\Model\PaymentMethodType::TINKOFF_BANK => t('Tinkoff online banking'),
         \YandexCheckout\Model\PaymentMethodType::INSTALLMENTS => t('Installments'),
     );
 }
@@ -676,7 +679,7 @@ function yamoney_api_get_payment_methods()
  */
 function yamoney_api_get_enabled_payment_methods()
 {
-    $payments         = array();
+    $payments = array();
 
     if (variable_get('yamoney_api_shop', 0)) {
         $all_payments     = yamoney_api_get_payment_methods();
@@ -694,7 +697,7 @@ function yamoney_api_get_enabled_payment_methods()
         );
     }
 
-    return $payments ;
+    return $payments;
 }
 
 /**
@@ -843,6 +846,7 @@ function yamoney_api__common__is_enable_hold_mode()
 
 /**
  * @param string $paymentMethod
+ *
  * @return bool
  */
 function yamoney_api__common__get_capture_value($paymentMethod)

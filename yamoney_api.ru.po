@@ -569,3 +569,6 @@ msgstr "Оплата заказа №%order_id%"
 #: yamoney_api.admin.inc:131
 msgid "Payment for order No. %order_number%"
 msgstr "Оплата заказа №%order_number%"
+
+msgid "Tinkoff online banking"
+msgstr "Интернет-банк Тинькофф"

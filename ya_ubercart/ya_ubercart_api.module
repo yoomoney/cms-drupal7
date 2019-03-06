@@ -237,7 +237,7 @@ function ya_ubercart_api_get_create_payment_request_builder($order, $amount, $pa
 function ya_ubercart_api_set_receipt_if_needed($builder, $order)
 {
     $tax = uc_taxes_uc_calculate_tax($order);
-    if (module_exists('uc_taxes') && count($tax) && variable_get('yamoney_api_send_check', false)) {
+    if (module_exists('uc_taxes') && variable_get('yamoney_api_send_check', false)) {
         $builder->setReceiptEmail($order->primary_email);
 
         if (count($tax)) {
