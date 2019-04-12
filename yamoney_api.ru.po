@@ -129,6 +129,10 @@ msgid "Rate for the receipt sent to the tax service"
 msgstr "Ставка для чека в налоговую"
 
 #: yamoney_api.admin.inc:168;228
+msgid "Default tax rate"
+msgstr "Ставка по умолчанию"
+
+#: yamoney_api.admin.inc:168;228
 msgid "Without VAT"
 msgstr "Без НДС"
 
@@ -141,16 +145,16 @@ msgid "10%"
 msgstr "10%"
 
 #: yamoney_api.admin.inc:171;231
-msgid "18%"
-msgstr "18%"
+msgid "20%"
+msgstr "20%"
 
 #: yamoney_api.admin.inc:172;232
 msgid "Applicable rate 10/110"
 msgstr "Расчётная ставка 10/110"
 
 #: yamoney_api.admin.inc:173;233
-msgid "Applicable rate 18/118"
-msgstr "Расчётная ставка 18/118"
+msgid "Applicable rate 20/120"
+msgstr "Расчётная ставка 20/120"
 
 #: yamoney_api.admin.inc:250;260
 msgid "Address for notifications"

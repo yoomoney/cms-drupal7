@@ -422,7 +422,7 @@ function ya_commerce_api_set_receipt_if_needed($builder, $order, $order_wrapper)
             $quantity = $line_item_wrapper->quantity->value();
             $tax      = $tax_id && variable_get('yamoney_api_kassa_tax_'.$tax_id)
                 ? variable_get('yamoney_api_kassa_tax_'.$tax_id)
-                : YAMONEY_API_DEFAULT_TAX_RATE_ID;
+                : variable_get('yamoney_api_kassa_tax_default', YAMONEY_API_DEFAULT_TAX_RATE_ID);
             $amount   = commerce_currency_amount_to_decimal(
                 $product->commerce_price['und'][0]['amount'],
                 $product->commerce_price['und'][0]['currency_code']
