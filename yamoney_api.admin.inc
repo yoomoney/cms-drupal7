@@ -167,6 +167,28 @@ function yamoney_api_admin_settings()
         $taxes = commerce_tax_ui_commerce_tax_rate_info();
 
         if ($taxes && variable_get('yamoney_api_send_check')) {
+
+            $form['yamoney_api_kassa_tab']['lbl_yamoney_api_kassa_tax_default'] = array(
+                '#markup' => '<div> <label style="width: 200px;float: left;padding-top: 10px;">'.t('Default tax rate').'</label>',
+            );
+            $form['yamoney_api_kassa_tab']['yamoney_api_kassa_tax_default']     = array(
+                '#type'          => 'select',
+                '#title_display' => false,
+                '#options'       => array(
+                    1 => t('Without VAT'),
+                    2 => t('0%'),
+                    3 => t('10%'),
+                    4 => t('20%'),
+                    5 => t('Applicable rate 10/110'),
+                    6 => t('Applicable rate 20/120'),
+                ),
+                '#default_value' => variable_get('yamoney_api_kassa_tax_default', YAMONEY_API_DEFAULT_TAX_RATE_ID),
+            );
+
+            $form['yamoney_api_kassa_tab']['lbl_yamoney_api_kassa_tax_default_end'] = array(
+                '#markup' => '</div>',
+            );
+
             $form['yamoney_api_kassa_tab']['lbl_wrapper_tax'] = array(
                 '#markup' => '<label>Сопоставьте ставки</label>',
             );
@@ -195,11 +217,11 @@ function yamoney_api_admin_settings()
                         1 => t('Without VAT'),
                         2 => t('0%'),
                         3 => t('10%'),
-                        4 => t('18%'),
+                        4 => t('20%'),
                         5 => t('Applicable rate 10/110'),
-                        6 => t('Applicable rate 18/118'),
+                        6 => t('Applicable rate 20/120'),
                     ),
-                    '#default_value' => variable_get('yamoney_api_kassa_tax_'.$tax['name'], 1),
+                    '#default_value' => variable_get('yamoney_api_kassa_tax_'.$tax['name'], YAMONEY_API_DEFAULT_TAX_RATE_ID),
                 );
 
                 $form['yamoney_api_kassa_tab']['lbl_yamoney_api_kassa_tax_'.$tax['name'].'_end'] = array(
@@ -347,9 +369,9 @@ function yamoney_api_admin_settings()
                         1 => t('Without VAT'),
                         2 => t('0%'),
                         3 => t('10%'),
-                        4 => t('18%'),
+                        4 => t('20%'),
                         5 => t('Applicable rate 10/110'),
-                        6 => t('Applicable rate 18/118'),
+                        6 => t('Applicable rate 20/120'),
                     ),
                     '#default_value' => variable_get('yamoney_api_kassa_tax_'.$tax->id, 1),
                     '#description'   => '',
