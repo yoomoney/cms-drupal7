@@ -302,6 +302,11 @@ function ya_commerce_api_submit_form_submit($payment_method, $pane_form, $pane_v
         $builder        = ya_commerce_api_get_create_payment_request_builder($order, $amount, $paymentMethod,
             $order_wrapper);
         $paymentRequest = $builder->build();
+
+        if ($paymentRequest->getReceipt() !== null) {
+            $paymentRequest->getReceipt()->normalize($paymentRequest->getAmount());
+        }
+
         $serializer     = new CreatePaymentRequestSerializer();
         $serializedData = $serializer->serialize($paymentRequest);
         YandexMoneyLogger::info('Create payment request: '.json_encode($serializedData));
@@ -795,6 +800,11 @@ function ya_commerce_api_capture_payment($payment, $order)
         ya_commerce_api_set_receipt_if_needed($builder, $order, $order_wrapper);
 
         $request  = $builder->build();
+
+        if ($request->getReceipt() !== null) {
+            $request->getReceipt()->normalize($request->getAmount());
+        }
+
         $response = $apiClient->capturePayment($request, $payment->getId());
     } catch (\Exception $e) {
         $this->module->log('error', 'Capture error: '.$e->getMessage());
