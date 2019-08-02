@@ -61,7 +61,6 @@ function yamoney_api_admin_settings()
     $form['yamoney_api_kassa_tab']['yamoney_api_shop'] = array(
         '#type'          => 'checkbox',
         '#title'         => t('Enable payment acceptance via Yandex.Checkout'),
-        '#attributes'    => array('id' => 'kassa-checkbox'),
         '#default_value' => variable_get('yamoney_api_shop', 0),
     );
 
@@ -501,7 +500,6 @@ function yamoney_api_admin_settings()
         '#type'          => 'checkbox',
         '#title'         => t('Record of debugging information'),
         '#description'   => t('Only required if Yandex.Checkout\'s specialists ask for it'),
-        '#attributes'    => array('id' => 'kassa-checkbox'),
         '#default_value' => variable_get('yamoney_api_debug', 0),
     );
 
@@ -524,7 +522,6 @@ function yamoney_api_admin_settings()
     );
     $form['yamoney_api_p2p_tab']['yamoney_api_p2p']         = array(
         '#type'          => 'checkbox',
-        '#attributes'    => array('id' => 'p2p-checkbox'),
         '#title'         => t('Enable payment acceptance to the Yandex.Money Wallet'),
         '#default_value' => variable_get('yamoney_api_p2p', 0),
     );
@@ -609,7 +606,6 @@ function yamoney_api_admin_settings()
     $form['yamoney_api_billing_tab']['yamoney_api_billing_enable'] = array(
         '#type'          => 'checkbox',
         '#title'         => t('Activate payments via Yandex.Billing'),
-        '#attributes'    => array('id' => 'billing-checkbox'),
         '#default_value' => variable_get('yamoney_api_billing_enable'),
     );
 
