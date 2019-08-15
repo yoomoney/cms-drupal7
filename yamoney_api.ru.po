@@ -469,6 +469,10 @@ msgstr "Поле телефон заполнено неверно."
 msgid "Payer's name is entered incorrectly."
 msgstr "Ф.И.О. плательщика введено не верно."
 
+#: ya_commerce_api.module:324
+msgid "Smart payment"
+msgstr "Умный платеж"
+
 #: ya_commerce_api.module:286;306
 msgid "Unable to create payment."
 msgstr "Неудалось создать платеж."
