@@ -575,7 +575,11 @@ function ya_commerce_api_yamoney_api_process_payment_alter(&$payment)
     /** @var YAMoneyApiTransaction $transaction */
     $transaction = $payment['transaction'];
     $order       = commerce_order_load($transaction->order_id);
+
     if ($order) {
+        $paymentId = $transaction->ymid;
+        yamoney_api_update_transaction_payment_id($transaction->ymid, $paymentId);
+        $transaction->status = yamoney_api_update_transaction_status($transaction->ymid, YAMoneyApiTransaction::STATUS_COMPLETED);
         ya_commerce_create_commerce_transaction(
             $transaction,
             COMMERCE_PAYMENT_STATUS_SUCCESS,
@@ -583,6 +587,8 @@ function ya_commerce_api_yamoney_api_process_payment_alter(&$payment)
             array(),
             $payment['request']
         );
+        commerce_order_status_update($order, YAMoneyApiTransaction::STATUS_COMPLETED);
+
         $payment['success'] = true;
     } else {
         $payment['success'] = false;
@@ -602,6 +608,48 @@ function ya_commerce_api_get_checkout_url($order, $success = true)
         'checkout/'.$order->order_id.'/payment/'.($success ? 'return' : 'back').'/'.$order->data['payment_redirect_key'],
         array('absolute' => true)
     );
+}
+
+/**
+ * @param YAMoneyTransaction $transaction
+ * @param string $status
+ * @param string $message
+ * @param array $message_params
+ * @param null $request
+ *
+ * @return bool
+ */
+function ya_commerce_create_commerce_transaction(
+    YAMoneyApiTransaction $transaction,
+    $status,
+    $message = '',
+    $message_params = array(),
+    $request = null
+) {
+    $order = commerce_order_load($transaction->order_id);
+
+    $order_wrapper              = entity_metadata_wrapper('commerce_order', $order);
+    $currency_code              = $order_wrapper->commerce_order_total->currency_code->value();
+    $payment_method_instance_id = 'ya_commerce|commerce_payment_ya_commerce';
+
+    // Prepare a transaction object to log the API response.
+    $commerce_transaction                    = commerce_payment_transaction_new($payment_method_instance_id, $order->order_id);
+    $commerce_transaction->instance_id       = $payment_method_instance_id;
+    $commerce_transaction->uid               = $transaction->uid;
+    $commerce_transaction->remote_id         = $transaction->ymid;
+    $commerce_transaction->message           = $message;
+    $commerce_transaction->message_variables = $message_params;
+    $commerce_transaction->amount            = $transaction->amount * 100;
+    $commerce_transaction->currency_code     = $currency_code;
+    $commerce_transaction->status            = $status;
+    $commerce_transaction->remote_status     = $transaction->status;
+
+    if ($request) {
+        $commerce_transaction->payload[REQUEST_TIME] = $request;
+    }
+
+    // Save the transaction information.
+    return !!commerce_payment_transaction_save($commerce_transaction);
 }
 
 function ya_commerce_api_get_return_url($order)
