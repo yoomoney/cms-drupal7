@@ -8,9 +8,10 @@
  */
 class YAMoneyApiTransaction extends stdClass {
   const STATUS_IN_PROCESS = 'in_process';
-  const STATUS_PROCESSED = 'processed';
-  const STATUS_PAYED = 'payed';
-  const STATUS_FAILED = 'failed';
+  const STATUS_PROCESSED  = 'processed';
+  const STATUS_PAYED      = 'payed';
+  const STATUS_FAILED     = 'failed';
+  const STATUS_COMPLETED  = 'completed';
 
   /**
    * @var int Transaction id.
@@ -152,9 +153,23 @@ function yamoney_api_transaction_save(YAMoneyApiTransaction $transaction) {
     $id = db_insert('yamoney_api_transaction')
       ->fields($fields)
       ->execute();
+
     $transaction->ymid = $id;
     return !!$id;
   }
+}
+
+/**
+ * Simply set transaction payment_id.
+ * @param $ymid string Transaction id
+ * @param $payment_id string Payment id
+ * @return bool
+ */
+function yamoney_api_update_transaction_payment_id($ymid, $payment_id) {
+    return !!db_update('yamoney_api_transaction')
+        ->fields(array('payment_id' => $payment_id))
+        ->condition('ymid', $ymid)
+        ->execute();
 }
 
 /**

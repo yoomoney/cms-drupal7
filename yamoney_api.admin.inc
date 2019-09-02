@@ -529,7 +529,7 @@ function yamoney_api_admin_settings()
         '#type'          => 'textfield',
         '#title'         => t('RedirectURL'),
         '#attributes'    => array('disabled' => 'disabled'),
-        '#default_value' => url('yamoney/check_wallet', array('absolute' => true)),
+        '#default_value' => url('yamoney_api/check_wallet', array('absolute' => true)),
         '#description'   => t(
             "Copy this link to the upper field at the <a href='https://sp-money.yandex.ru/myservices/online.xml' target='_blank'>HTTP notifications page</a>"
         ),
