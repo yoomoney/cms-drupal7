@@ -10,13 +10,14 @@ use YandexCheckout\Request\Payments\Payment\CreateCaptureRequest;
 $modulePath = drupal_get_path('module', 'yamoney_api');
 require_once $modulePath.DIRECTORY_SEPARATOR.'YandexMoneyLogger.php';
 require_once $modulePath.DIRECTORY_SEPARATOR.'yandex-checkout-sdk-php'.DIRECTORY_SEPARATOR.'autoload.php';
+require_once $modulePath.DIRECTORY_SEPARATOR.'KassaSecondReceiptModel.php';
 
 define('YAMONEY_API_CHECK_RESULT_CODE_SUCCESS', 0);
 define('YAMONEY_API_CHECK_RESULT_CODE_ERROR_MD5', 1);
 define('YAMONEY_API_CHECK_RESULT_CODE_ERROR_CUSTOM', 100);
 define('YAMONEY_API_CHECK_RESULT_CODE_ERROR_REQUEST', 200);
 define('YAMONEY_API_DEFAULT_TAX_RATE_ID', 1);
-define('YAMONEY_MODULE_VERSION', '1.0.21');
+define('YAMONEY_MODULE_VERSION', '1.1.0');
 define('YAMONEY_API_DEFAULT_PAYMENT_METHOD', \YandexCheckout\Model\PaymentMethodType::BANK_CARD);
 define('QUICK_API_PAY_VERSION', 2);
 define('INSTALLMENTS_MIN_AMOUNT', 3000);
@@ -161,6 +162,9 @@ function yamoney_api__common__get_api_client()
     $apiClient    = new Client();
     $apiClient->setAuth($shopId, $shopPassword);
     $apiClient->setLogger(new YandexMoneyLogger());
+    $userAgent = $apiClient->getApiClient()->getUserAgent();
+    $userAgent->setCms('Drupal', VERSION);
+    $userAgent->setModule('yandex-money-cms-v2', YAMONEY_MODULE_VERSION);
 
     return $apiClient;
 }
@@ -201,6 +205,8 @@ function yamoney_api_ubercart_return_page()
             YandexMoneyLogger::info('Payment failed. Empty payment info. PaymentId #'.$paymentId);
             drupal_goto($failUrl);
         }
+        $transaction->status = $payment->getStatus();
+        yamoney_api_transaction_save($transaction);
         $url = $payment->getPaid() ? $successUrl : $failUrl;
         drupal_goto($url);
     } catch (Exception $e) {
@@ -226,16 +232,15 @@ function yamoney_api_commerce_return_page()
         YandexMoneyLogger::info('Payment failed. Can not load oder id #'.$params['orderId']);
         drupal_goto($failUrl);
     }
-    $transactions = commerce_payment_transaction_load_multiple(array(), array('order_id' => $order->order_id));
-    $transaction  = !empty($transactions) ? array_shift($transactions) : null;
 
+    $transaction = yamoney_api_transaction_load_by_order($order->order_id);
     if (!$transaction) {
         YandexMoneyLogger::info('Payment failed. Transaction not found for order id #'.$params['orderId']);
         drupal_goto($failUrl);
     }
     $apiClient = yamoney_api__common__get_api_client();
 
-    $paymentId = $transaction->remote_id;
+    $paymentId = $transaction->payment_id;
 
     try {
         $payment = $apiClient->getPaymentInfo($paymentId);
@@ -244,6 +249,8 @@ function yamoney_api_commerce_return_page()
             drupal_goto($failUrl);
         }
 
+        $transaction->status = $payment->getStatus();
+        yamoney_api_transaction_save($transaction);
         $url = $payment->getPaid() ? $successUrl : $failUrl;
         drupal_goto($url);
     } catch (Exception $e) {
@@ -868,4 +875,69 @@ function yamoney_api__common__get_capture_value($paymentMethod)
     }
 
     return !in_array($paymentMethod, array('', PaymentMethodType::BANK_CARD));
+}
+
+function yamoney_api_send_second_receipt($orderInfo)
+{
+    $transaction = yamoney_api_transaction_load_by_order($orderInfo['order_id']);
+    $result = array(
+        'is_send' => false,
+        'message' => null,
+    );
+
+    if (empty($transaction->payment_id)) {
+        YandexMoneyLogger::info("Second receipt isn't need, reason: paymentId is empty");
+        return (object)$result;
+    }
+
+    try {
+        $apiClient   = yamoney_api__common__get_api_client();
+        $paymentInfo = $apiClient->getPaymentInfo($transaction->payment_id);
+    } catch (Exception $e) {
+        YandexMoneyLogger::info("Second receipt isn't need, reason: {$e->getMessage()}");
+        return (object)$result;
+    }
+
+    $secondReceiptModel = new KassaSecondReceiptModel($paymentInfo, $orderInfo, $apiClient);
+
+    if (!$secondReceiptModel->sendSecondReceipt()) {
+        return (object)$result;
+    }
+
+    YandexMoneyLogger::info("Second receipt send. Write history change");
+
+    $sum = number_format($secondReceiptModel->getSettlementsSum(), 2, '.', ' ');
+
+    $result['is_send'] = true;
+    $result['message'] = sprintf(t('Second receipt sent. Amount %s rubles'), $sum);
+
+    return (object)$result;
+}
+
+/**
+ * @param $new_status string
+ * @return bool
+ */
+function yamoney_api_is_need_second_receipt($new_status)
+{
+    $isSendReceipt       = variable_get('yamoney_api_send_check', 0);
+    $isSendSecondReceipt = variable_get('yamoney_api_send_second_receipt', 0);
+    $secondReceiptStatus = variable_get('yamoney_api_second_receipt_status', 0);
+
+    if (!$isSendReceipt) {
+        YandexMoneyLogger::error('54 fz dont activate');
+        return false;
+    } elseif (!$isSendSecondReceipt) {
+        YandexMoneyLogger::error('Send second receipt dont activate');
+        return false;
+    } elseif (!$secondReceiptStatus) {
+        YandexMoneyLogger::error('Not selected second receipt status');
+        return false;
+    } elseif ($secondReceiptStatus != $new_status) {
+        YandexMoneyLogger::error('Incorrect order status, expected status = ' . $secondReceiptStatus
+            . ' current status = ' . $new_status);
+        return false;
+    }
+
+    return true;
 }

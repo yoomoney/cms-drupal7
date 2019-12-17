@@ -319,6 +319,40 @@ function yamoney_api_admin_settings()
                     ),
                 )
             );
+
+            $form['yamoney_api_kassa_tab']['yamoney_api_send_second_receipt'] = array(
+                '#type'          => 'radios',
+                '#title'         => t('Second receipt'),
+                '#options'       => array(
+                    '1' => t('Enable'),
+                    '0' => t('Disable'),
+                ),
+                '#default_value' => variable_get('yamoney_api_send_second_receipt', '0'),
+            );
+
+            $statuses = array();
+
+            foreach (commerce_order_state_get_title() as $name => $title) {
+                foreach (commerce_order_statuses(array('state' => $name)) as $order_status) {
+                    // Only include enabled statues and the current order status.
+                    if (!empty($order_status['status'])) {
+                        $statuses[check_plain($title)][$order_status['name']] = check_plain($order_status['title']);
+                    }
+                }
+            }
+
+            $form['yamoney_api_kassa_tab']['yamoney_api_second_receipt_status'] = array(
+                '#type' => 'select',
+                '#title' => t('Generate a second check when the order goes into status'),
+                '#options' => $statuses,
+                '#default_value' => variable_get('yamoney_api_second_receipt_status'),
+                '#states' => array(
+                    'invisible' => array(
+                        ':input[name="yamoney_send_check"]' => array('value' => '0'),
+                        ':input[name="yamoney_api_send_second_receipt"]' => array('value' => '0'),
+                    ),
+                )
+            );
         }
     }
 
@@ -469,6 +503,34 @@ function yamoney_api_admin_settings()
                 '#states' => array(
                     'invisible' => array(
                         ':input[name="yamoney_send_check"]' => array('value' => '0'),
+                    ),
+                )
+            );
+
+            $form['yamoney_api_kassa_tab']['yamoney_api_send_second_receipt'] = array(
+                '#type'          => 'radios',
+                '#title'         => t('Second receipt'),
+                '#options'       => array(
+                    '1' => t('Enable'),
+                    '0' => t('Disable'),
+                ),
+                '#default_value' => variable_get('yamoney_api_send_second_receipt', '0'),
+            );
+
+            $statuses = array();
+            foreach (uc_order_status_list() as $status) {
+                $statuses[$status['id']] = $status['title'];
+            }
+
+            $form['yamoney_api_kassa_tab']['yamoney_api_second_receipt_status'] = array(
+                '#type' => 'select',
+                '#title' => t('Generate a second check when the order goes into status'),
+                '#options' => $statuses,
+                '#default_value' => variable_get('yamoney_api_second_receipt_status'),
+                '#states' => array(
+                    'invisible' => array(
+                        ':input[name="yamoney_send_check"]' => array('value' => '0'),
+                        ':input[name="yamoney_api_send_second_receipt"]' => array('value' => '0'),
                     ),
                 )
             );

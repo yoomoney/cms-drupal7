@@ -14,6 +14,39 @@ require_once $modulePath.DIRECTORY_SEPARATOR.'YandexMoneyLogger.php';
 require_once $modulePath.DIRECTORY_SEPARATOR.'InstallmentsApi.php';
 
 /**
+ * Implements hook_commerce_order_presave().
+ */
+function ya_commerce_api_commerce_order_presave($order)
+{
+    if (empty($order->original)) {
+        return;
+    }
+
+    if ($order->status == $order->original->status) {
+        return;
+    }
+
+    if (!yamoney_api_is_need_second_receipt($order->status)) {
+        return;
+    }
+
+    $orderInfo = array(
+        'order_id'   => $order->order_id,
+        'user_email' => empty($order->mail) ? null : $order->mail,
+        'user_phone' => empty($order->phone) ? null : $order->phone,
+    );
+
+    $result = yamoney_api_send_second_receipt($orderInfo);
+
+    if (!$result->is_send) {
+        return;
+    }
+
+    $order->log = $result->message;
+}
+
+
+/**
  * Implements hook_commerce_payment_method_info().
  */
 function ya_commerce_api_commerce_payment_method_info()
@@ -321,7 +354,7 @@ function ya_commerce_api_submit_form_submit($payment_method, $pane_form, $pane_v
                 $transaction->currency_code = $currency_code;
                 $transaction->status        = COMMERCE_PAYMENT_STATUS_PENDING;
                 $transaction->remote_status = $response->getStatus();
-                $transaction->message       = $response->getPaymentMethod() ? $response->getPaymentMethod() : t('Smart payment');
+                $transaction->message       = $response->getPaymentMethod() ? $response->getPaymentMethod()->getType() : t('Smart payment');
                 commerce_order_status_update($order, YAMONEY_API_ORDER_STATUS_PENDING);
                 $ymTransaction             = new YAMoneyApiTransaction();
                 $ymTransaction->uid        = isset($user->uid) ? $user->uid : 0;

@@ -10,6 +10,37 @@ use YandexCheckout\Request\Payments\Payment\CreateCaptureRequestBuilder;
 $modulePath = drupal_get_path('module', 'yamoney_api');
 require_once $modulePath.DIRECTORY_SEPARATOR.'YandexMoneyLogger.php';
 require_once $modulePath.DIRECTORY_SEPARATOR.'InstallmentsApi.php';
+define('EVENT_ORDER_UPDATE', 'update');
+
+
+/**
+ * @param $event
+ * @param $order
+ * @param $new_status
+ */
+function ya_ubercart_api_uc_order($event, $order, $new_status){
+    if ($event != EVENT_ORDER_UPDATE) {
+        return;
+    }
+
+    if (!yamoney_api_is_need_second_receipt($new_status)) {
+        return;
+    }
+
+    $orderInfo = array(
+        'order_id'   => $order->order_id,
+        'user_email' => empty($order->primary_email) ? null : $order->primary_email,
+        'user_phone' => empty($order->billing_phone) ? null : $order->billing_phone,
+    );
+
+    $result = yamoney_api_send_second_receipt($orderInfo);
+
+    if (!$result->is_send) {
+        return;
+    }
+
+    uc_order_comment_save($order->order_id, $order->uid, $result->message, 'admin', $status = $new_status);
+}
 
 /**
  * Implements hook_uc_payment_method().
@@ -86,6 +117,7 @@ function ya_ubercart_api_form($form, &$form_state, $order)
         } else {
             $paymentMethod = '';
         }
+
         $builder        = ya_ubercart_api_get_create_payment_request_builder($order, $amount, $paymentMethod);
         $paymentRequest = $builder->build();
 
@@ -193,6 +225,7 @@ function ya_ubercart_api_form($form, &$form_state, $order)
 function ya_ubercart_api_get_create_payment_request_builder($order, $amount, $paymentMethod)
 {
     $confirmationType = \YandexCheckout\Model\ConfirmationType::REDIRECT;
+
     if ($paymentMethod == 'alfabank') {
         $confirmationType = \YandexCheckout\Model\ConfirmationType::EXTERNAL;
         $paymentMethod    = new \YandexCheckout\Model\PaymentData\PaymentDataAlfabank();
@@ -215,12 +248,10 @@ function ya_ubercart_api_get_create_payment_request_builder($order, $amount, $pa
                                    ->setPaymentMethodData($paymentMethod)
                                    ->setCapture(yamoney_api__common__get_capture_value($paymentMethod))
                                    ->setDescription(ya_ubercart_api_create_description($order))
-                                   ->setConfirmation(
-                                       array(
+                                   ->setConfirmation(array(
                                            'type'      => $confirmationType,
                                            'returnUrl' => ya_ubercart_api_get_return_url($order),
-                                       )
-                                   )
+                                   ))
                                    ->setMetadata(array(
                                        'cms_name'       => 'ya_api_drupal_ubercart',
                                        'module_version' => YAMONEY_MODULE_VERSION,
@@ -311,9 +342,11 @@ function uc_payment_method_ya_ubercart_api($op, &$order, $form = array(), &$form
             $form     = array();
             $disabled = false;
             $methods  = yamoney_api_get_enabled_payment_methods();
+
             if (isset($order->order_total) && ($order->order_total < INSTALLMENTS_MIN_AMOUNT)) {
                 unset($methods[\YandexCheckout\Model\PaymentMethodType::INSTALLMENTS]);
             }
+
             if (isset($order->order_total) && isset($methods[\YandexCheckout\Model\PaymentMethodType::INSTALLMENTS])) {
                 $shopId             = variable_get('yamoney_api_shop_id');
                 $monthlyInstallment = InstallmentsApi::creditPreSchedule($shopId, $order->order_total);
@@ -327,19 +360,22 @@ function uc_payment_method_ya_ubercart_api($op, &$order, $form = array(), &$form
                     YandexMoneyLogger::error($errorMessage);
                 }
             }
+
             if (count($methods) === 1) {
                 $disabled = true;
             }
 
             if (variable_get('yamoney_api_paymode') == 'shop' && variable_get('ya_payments_select', 1)) {
                 $defaultValue = isset($_SESSION['pay_method'])
-                    ? $_SESSION['pay_method']
-                    : variable_get('yamoney_api_default_payment_method', YAMONEY_API_DEFAULT_PAYMENT_METHOD);
+                                ? $_SESSION['pay_method']
+                                : variable_get('yamoney_api_default_payment_method', YAMONEY_API_DEFAULT_PAYMENT_METHOD);
+
                 if (!isset($methods[$defaultValue])) {
                     $defaultValue = isset($methods[YAMONEY_API_DEFAULT_PAYMENT_METHOD])
                         ? YAMONEY_API_DEFAULT_PAYMENT_METHOD
                         : key($methods);
                 }
+
                 $form['pay_method'] = array(
                     '#type'          => 'radios',
                     '#title'         => t('Select your payment type:'),
@@ -359,6 +395,7 @@ function uc_payment_method_ya_ubercart_api($op, &$order, $form = array(), &$form
 
                 return $form;
             }
+
             if (variable_get('yamoney_api_billing_enable', 0)) {
                 $form                  = array();
                 $form['customer_name'] = array(
@@ -368,7 +405,7 @@ function uc_payment_method_ya_ubercart_api($op, &$order, $form = array(), &$form
                 );
 
                 return $form;
-            } else {
+            } elseif (variable_get('yamoney_api_p2p', 0)) {
                 $form['pay_method'] = array(
                     '#type'          => 'radios',
                     '#title'         => t('Select your payment type:'),
