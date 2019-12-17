@@ -112,6 +112,12 @@ msgstr "Метод оплаты по умолчанию"
 msgid "Transmit details for receipts to Yandex.Checkout (Federal Law No. 54-FZ)"
 msgstr "Отправлять в Яндекс.Кассу данные для чеков (54-ФЗ)"
 
+msgid "Second receipt"
+msgstr "Второй чек"
+
+msgid "Generate a second check when the order goes into status"
+msgstr "Формировать второй чек при переходе заказа в статус"
+
 #: yamoney_api.admin.inc:134;192
 msgid "Enable"
 msgstr "Включить"
@@ -580,3 +586,6 @@ msgstr "Оплата заказа №%order_number%"
 
 msgid "Tinkoff online banking"
 msgstr "Интернет-банк Тинькофф"
+
+msgid "Second receipt sent. Amount %s rubles"
+msgstr "Отправлен второй чек. Сумма %s рублей."
