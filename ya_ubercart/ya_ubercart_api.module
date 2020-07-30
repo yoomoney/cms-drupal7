@@ -65,7 +65,7 @@ function ya_ubercart_api_uc_payment_method()
     } else if (variable_get('yamoney_api_p2p', 0)) {
         $display_title = t('Yandex.Money (bank card, e-wallet)');
     } else if (variable_get('yamoney_api_billing_enable', 0)) {
-        $display_title = t('Yandex.Billing (bank card, e-wallets)');
+        $display_title = t('Billing (bank card, e-wallets)');
     }
 
     $display_title                      .= '<br/>'.$icon;
