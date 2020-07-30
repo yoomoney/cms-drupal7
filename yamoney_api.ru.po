@@ -251,37 +251,37 @@ msgid "Text for fail page"
 msgstr "Текст для страницы неуспеха"
 
 #: yamoney_api.admin.inc:367
-msgid "Yandex.Billing"
-msgstr "Яндекс.Платежка"
+msgid "Billing"
+msgstr "Платежка"
 
 #: yamoney_api.admin.inc:373
 msgid ""
 "This is a payment form for your site. It allows for accepting payments to "
 "your company account from cards and Yandex.Money e-wallets without a "
-"contract. To set it up, you need to provide the Yandex.Billing identifier: "
+"contract. To set it up, you need to provide the Billing identifier: "
 "we will send it via email after you <a href='https://money.yandex.ru/"
 "fastpay'>create a form in construction kit.</a>"
 msgstr "Это платежная форма на ваш сайт. Позволяет принимать платежи на счет компании — с карт или из кошельков Яндекс.Денег, без договора. Для настройки нужен идентификатор Платежки: он придёт в письме,<a href='https://money.yandex.ru/fastpay'>когда вы соберете форму в конструкторе.</a>"
 
 #: yamoney_api.admin.inc:380
-msgid "Activate payments via Yandex.Billing"
-msgstr "Включить прием платежей через Яндекс.Платежку"
+msgid "Activate payments via Billing"
+msgstr "Включить прием платежей через Платежку"
 
 #: yamoney_api.admin.inc:387
-msgid "Yandex.Billing's identifier"
-msgstr "Идентификатор Яндекс.Платежки"
+msgid "Billing's identifier"
+msgstr "Идентификатор Платежки"
 
 #: yamoney_api.admin.inc:394
 msgid "Payment purpose"
 msgstr "Назначение платежа"
 
 #: yamoney_api.admin.inc:395
-msgid "Purpose of payment is added to the payment order: specify whatever will help identify the order paid via Yandex.Billing"
+msgid "Purpose of payment is added to the payment order: specify whatever will help identify the order paid via Billing"
 msgstr "Назначение будет в платежном поручении: напишите в нем всё, что поможет отличить заказ, который оплатили через Платежку"
 
 #: yamoney_api.admin.inc:400
-msgid "Order No. %order_id% Payment via Yandex.Billing"
-msgstr "Номер заказа %order_id% Оплата через Яндекс.Платежку"
+msgid "Order No. %order_id% Payment via Billing"
+msgstr "Номер заказа %order_id% Оплата через Платежку"
 
 #: yamoney_api.admin.inc:420;442
 msgid ""
@@ -291,8 +291,8 @@ msgstr ""
 "time"
 
 #: yamoney_api.admin.inc:431
-msgid "Unable to activate payments via Yandex.Billing and Yandex.Checkout at the same time"
-msgstr "Невозможно одновременно включить оплату через Яндекс.Платежку и Яндекс.Кассу"
+msgid "Unable to activate payments via Billing and Yandex.Checkout at the same time"
+msgstr "Невозможно одновременно включить оплату через Платежку и Яндекс.Кассу"
 
 #: yamoney_api.admin.inc:463
 msgid ""
@@ -440,8 +440,8 @@ msgid "Yandex.Money (bank card, e-wallet)"
 msgstr "Яндекс.Деньги (банковские карты, кошелек)"
 
 #: ya_commerce_api.module:33 ya_ubercart_api.module:33
-msgid "Yandex.Billing (bank card, e-wallets)"
-msgstr "Яндекс.Платежка (банковские карты, кошелек)"
+msgid "Billing (bank card, e-wallets)"
+msgstr "Платежка (банковские карты, кошелек)"
 
 #: ya_commerce_api.module:40
 msgid "Yandex"

@@ -654,26 +654,26 @@ function yamoney_api_admin_settings()
 
     $form['yamoney_api_billing_tab'] = array(
         '#type'   => 'fieldset',
-        '#title'  => t('Yandex.Billing'),
+        '#title'  => t('Billing'),
         '#group'  => 'vertical_tabs',
         '#weight' => 50,
     );
 
     $form['yamoney_api_billing_tab']['intro'] = array(
         '#markup' => t(
-            'This is a payment form for your site. It allows for accepting payments to your company account from cards and Yandex.Money e-wallets without a contract. To set it up, you need to provide the Yandex.Billing identifier: we will send it via email after you <a href=\'https://money.yandex.ru/fastpay\'>create a form in construction kit.</a>'
+            'This is a payment form for your site. It allows for accepting payments to your company account from cards and Yandex.Money e-wallets without a contract. To set it up, you need to provide the Billing identifier: we will send it via email after you <a href=\'https://money.yandex.ru/fastpay\'>create a form in construction kit.</a>'
         ),
     );
 
     $form['yamoney_api_billing_tab']['yamoney_api_billing_enable'] = array(
         '#type'          => 'checkbox',
-        '#title'         => t('Activate payments via Yandex.Billing'),
+        '#title'         => t('Activate payments via Billing'),
         '#default_value' => variable_get('yamoney_api_billing_enable'),
     );
 
     $form['yamoney_api_billing_tab']['yamoney_api_billing_id'] = array(
         '#type'          => 'textfield',
-        '#title'         => t('Yandex.Billing\'s identifier'),
+        '#title'         => t('Billing\'s identifier'),
         '#default_value' => variable_get('yamoney_api_billing_id', ''),
         '#size'          => 30,
     );
@@ -682,11 +682,11 @@ function yamoney_api_admin_settings()
         '#type'          => 'textfield',
         '#title'         => t('Payment purpose'),
         '#description'   => t(
-            'Purpose of payment is added to the payment order: specify whatever will help identify the order paid via Yandex.Billing'
+            'Purpose of payment is added to the payment order: specify whatever will help identify the order paid via Billing'
         ),
         '#default_value' => variable_get(
             'yamoney_api_billing_narrative',
-            t('Order No. %order_id% Payment via Yandex.Billing')
+            t('Order No. %order_id% Payment via Billing')
         ),
         '#size'          => 30,
     );
@@ -717,7 +717,7 @@ function yamoney_api_admin_settings_validate($form, &$form_state)
         $form_state['values']['yamoney_api_shop']           = 1;
         $form_state['values']['yamoney_api_billing_enable'] = 0;
         drupal_set_message(
-            t('Unable to activate payments via Yandex.Billing and Yandex.Checkout at the same time'),
+            t('Unable to activate payments via Billing and Yandex.Checkout at the same time'),
             'warning'
         );
         form_set_error('yamoney_api_shop');
