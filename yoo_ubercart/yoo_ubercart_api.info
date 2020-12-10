@@ -1,0 +1,7 @@
+name = YooMoney Ubercart Api
+description = "YooMoney module for Ubercart."
+package = YooMoney
+core = 7.x
+version = 2.0.0
+dependencies[] = yoomoney_api
+dependencies[] = uc_payment

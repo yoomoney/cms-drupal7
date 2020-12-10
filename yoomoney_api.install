@@ -1,0 +1,138 @@
+<?php
+/**
+ * Implements hook_schema().
+ */
+function yoomoney_api_schema() {
+  $schema['yoomoney_api_transaction'] = array(
+  'description' => 'YooMoney transactions table.',
+    'fields' => array(
+      'ymid' => array(
+        'type' => 'serial',
+        'not null' => TRUE,
+        'description' => "The transaction id.",
+      ),
+      'uid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => "Transaction user id ",
+      ),
+      'amount' => array(
+        'type' => 'float',
+        'size' => 'big',
+        'not null' => TRUE,
+        'description' => 'Transaction amount.',
+      ),
+      'created' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => 'The Unix timestamp when the transaction was created.',
+      ),
+      'status' => array(
+        'type' => 'varchar',
+        'length' => 64,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => "The transaction status.",
+      ),
+      'mail' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => "The transaction user e-mail.",
+      ),
+      'order_id' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => "Order id ",
+      ),
+      'data' => array(
+        'type' => 'blob',
+        'not null' => TRUE,
+        'size' => 'big',
+        'description' => 'Serialized array of additional trasaction information.',
+      ),
+        'payment_id' => array(
+            'type' => 'varchar',
+            'length' => 255,
+            'not null' => FALSE,
+            'default' => '',
+            'description' => "Payment id in Kassa",
+        ),
+    ),
+    'primary key' => array('ymid'),
+    'indexes' => array(
+      'uid' => array('uid'),
+      'created' => array('created'),
+    ),
+  );
+  return $schema;
+}
+
+/**
+ * Allow fields 'uid', 'mail', 'order_id' and 'data' to be NULL
+ */
+function yoomoney_api_update_7100(&$sandbox) {
+  $change_fields = array(
+    'uid' => array(
+      'type' => 'int',
+      'unsigned' => TRUE,
+      'not null' => FALSE,
+      'default' => 0,
+      'description' => "Transaction user id ",
+    ),
+    'mail' => array(
+      'type' => 'varchar',
+      'length' => 64,
+      'not null' => FALSE,
+      'default' => '',
+      'description' => "The transaction status.",
+    ),
+    'order_id' => array(
+      'type' => 'int',
+      'unsigned' => TRUE,
+      'not null' => FALSE,
+      'default' => 0,
+      'description' => "Order id ",
+    ),
+    'data' => array(
+      'type' => 'blob',
+      'not null' => FALSE,
+      'size' => 'big',
+      'description' => 'Serialized array of additional trasaction information.',
+    ),
+  );
+  foreach ($change_fields as $field_name => $field_config) {
+    db_change_field('yoomoney_api_transaction', $field_name, $field_name, $field_config);
+  }
+}
+
+/**
+ *
+ */
+function yoomoney_api_uninstall() {
+  $variables = array(
+    'yoomoney_api_ip',
+    'yoomoney_api_payment_method',
+    'yoomoney_api_default_payment_method',
+    'yoomoney_api_enable_hold_mode',
+    'yoomoney_api_description_template',
+    'yoomoney_api_shop',
+    'yoomoney_api_shop_id',
+    'yoomoney_api_secret',
+    'yoomoney_api_receiver',
+    'yoomoney_api_formcomment',
+    'yoomoney_api_success_text',
+    'yoomoney_api_fail_text',
+    'yoo_kassa_send_check'
+  );
+
+  foreach ($variables as $variable) {
+    variable_del($variable);
+  }
+}

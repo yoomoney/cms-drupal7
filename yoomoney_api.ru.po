@@ -1,0 +1,548 @@
+# $Id$
+#
+# Russian translation of Drupal (general)
+# Copyright YEAR NAME <EMAIL@ADDRESS>
+# Generated from files:
+#  yoomoney_api.admin.inc: n/a
+#  yoomoney_api.module: n/a
+#  yoomoney_api.info: n/a
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"POT-Creation-Date: 2018-03-12 11:09+0300\n"
+"PO-Revision-Date: 2018-04-05 18:44+0300\n"
+"Last-Translator: NAME <EMAIL@ADDRESS>\n"
+"Language-Team: Russian <EMAIL@ADDRESS>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Language: en\n"
+"X-Generator: Poedit 2.0.6\n"
+
+#: yoomoney_api.admin.inc:25
+msgid ""
+"By operating the module, you automatically agree with <a href='https://yoomoney.ru/doc.xml?id=527132' target='_blank'>its Terms and Conditions of Use</a>."
+
+msgstr ""
+"Работая с модулем, вы автоматически соглашаетесь с <a href=\"https://yoomoney.ru/doc.xml?id=527132\" target=\"_blank\">условиями его использования</a>."
+
+#: yoomoney_api.admin.inc:31
+msgid "Version: "
+msgstr "Версия: "
+
+#: yoomoney_api.admin.inc:35
+msgid "Allowed IPs for callbacks"
+msgstr "Список доступных IP для нотификаций"
+
+#: yoomoney_api.admin.inc:37
+msgid ""
+"The list of IP addresses which has access to payment callbacks. One per line."
+"<br/>0.0.0.0 means allow from all."
+msgstr ""
+"The list of IP addresses which has access to payment callbacks. One per line."
+"<br/>0.0.0.0 means allow from all."
+
+#: yoomoney_api.admin.inc:48
+msgid "YooKassa"
+msgstr "ЮKassa"
+
+#: yoomoney_api.admin.inc:53
+msgid "<h3>Store settings</h3>"
+msgstr "<h3>Настройки магазина</h3>"
+
+#: yoomoney_api.admin.inc:56
+msgid ""
+"To start operating the module, you need to connect your store to <a target=\"_blank\" href=\"https://yookassa.ru/en/\">YooKassa</a>"
+msgstr ""
+"Для работы с модулем нужно подключить магазин к <a target=\"_blank\" href="
+"\"https://yookassa.ru/\">ЮKassa</a>."
+
+#: yoomoney_api.admin.inc:63
+msgid "Enable payment acceptance via YooKassa"
+msgstr "Включить приём платежей через ЮKassa"
+
+#: yoomoney_api.admin.inc:71
+msgid "shopId"
+msgstr "shopId"
+
+#: yoomoney_api.admin.inc:72
+msgid "Copy shopId from your YooKassa's Merchant Profile"
+msgstr "Скопируйте shopId из личного кабинета ЮKassa"
+
+#: yoomoney_api.admin.inc:78
+msgid "Secret key"
+msgstr "Секретный ключ"
+
+#: yoomoney_api.admin.inc:79
+msgid ""
+"Issue and activate a secret key under your YooKassa's Merchant "
+"Profile. Then copy it here."
+msgstr ""
+"Выпустите и активируйте секретный ключ в личном кабинете ЮKassa. Потом "
+"скопируйте его сюда."
+
+#: yoomoney_api.admin.inc:93
+msgid "Select payment method"
+msgstr "Сценарий оплаты"
+
+#: yoomoney_api.admin.inc:95
+msgid "On YooKassa's site"
+msgstr "На стороне ЮKassa"
+
+#: yoomoney_api.admin.inc:96
+msgid "On the store's site"
+msgstr "На стороне магазина"
+
+#: yoomoney_api.admin.inc:112
+msgid "Enabled payment methods"
+msgstr "Включенные методы оплаты"
+
+#: yoomoney_api.admin.inc:120
+msgid "Default payment method"
+msgstr "Метод оплаты по умолчанию"
+
+#: yoomoney_api.admin.inc:132;190
+msgid "Transmit details for receipts to YooKassa (Federal Law No. 54-FZ)"
+msgstr "Отправлять в ЮKassa данные для чеков (54-ФЗ)"
+
+msgid "Second receipt"
+msgstr "Второй чек"
+
+msgid "Generate a second check when the order goes into status"
+msgstr "Формировать второй чек при переходе заказа в статус"
+
+#: yoomoney_api.admin.inc:134;192
+msgid "Enable"
+msgstr "Включить"
+
+#: yoomoney_api.admin.inc:135;193
+msgid "Disable"
+msgstr "Выключить"
+
+#: yoomoney_api.admin.inc:151;209
+msgid "Rate at your store"
+msgstr "Ставка в вашем магазине"
+
+#: yoomoney_api.admin.inc:154;212
+msgid "Rate for the receipt sent to the tax service"
+msgstr "Ставка для чека в налоговую"
+
+#: yoomoney_api.admin.inc:168;228
+msgid "Default tax rate"
+msgstr "Ставка по умолчанию"
+
+#: yoomoney_api.admin.inc:168;228
+msgid "Without VAT"
+msgstr "Без НДС"
+
+#: yoomoney_api.admin.inc:169;229
+msgid "0%"
+msgstr "0%"
+
+#: yoomoney_api.admin.inc:170;230
+msgid "10%"
+msgstr "10%"
+
+#: yoomoney_api.admin.inc:171;231
+msgid "20%"
+msgstr "20%"
+
+#: yoomoney_api.admin.inc:172;232
+msgid "Applicable rate 10/110"
+msgstr "Расчётная ставка 10/110"
+
+#: yoomoney_api.admin.inc:173;233
+msgid "Applicable rate 20/120"
+msgstr "Расчётная ставка 20/120"
+
+#: yoomoney_api.admin.inc:250;260
+msgid "Address for notifications"
+msgstr "Url для уведомлений"
+
+#: yoomoney_api.admin.inc:252;262
+msgid "Only required if YooKassa's specialists ask for it"
+msgstr "Этот адрес понадобится, только если его попросят специалисты ЮKassa"
+
+#: yoomoney_api.admin.inc:269
+msgid "Record of debugging information"
+msgstr "Запись отладочной информации"
+
+#: yoomoney_api.admin.inc:270
+msgid "Only required if YooKassa's specialists ask for it"
+msgstr "Настройку нужно будет поменять, только если попросят специалисты ЮMoney"
+
+#: yoomoney_api.admin.inc:277
+msgid "Download the log"
+msgstr "Скачать лог"
+
+#: yoomoney_api.admin.inc:285
+msgid "YooMoney"
+msgstr "ЮMoney"
+
+#: yoomoney_api.admin.inc:290
+msgid ""
+"To start operating the module, you need to <a href=\"https://yoomoney.ru/"
+"new\" target=\"_blank\">start a YooMoney wallet</a> and <a href="
+"\"https://yoomoney.ru/transfer/myservices/http-notification\" target=\"_blank"
+"\">register the app</a> at the YooMoney website"
+msgstr ""
+"Для работы с модулем нужно <a href=\"https://yoomoney.ru/new\" target="
+"\"_blank\">открыть кошелек</a> ЮMoney и <a href=\"yoomoney.ru/transfer/myservices/http-notification\" target=\"_blank\">зарегистрировать "
+"приложение</a> на сайте ЮMoney"
+
+#: yoomoney_api.admin.inc:297
+msgid "Enable payment acceptance to the YooMoney Wallet"
+msgstr "Включить прием платежей в кошелек ЮMoney"
+
+#: yoomoney_api.admin.inc:302
+msgid "RedirectURL"
+msgstr "RedirectURL"
+
+#: yoomoney_api.admin.inc:305
+msgid ""
+"Copy this link to the upper field at the <a href='https://yoomoney.ru/transfer/"
+"myservices/http-notification' target='_blank'>HTTP notifications page</a>"
+msgstr ""
+"Скопируйте эту ссылку в верхнее поле на <a href='https://yoomoney.ru/transfer/"
+"myservices/http-notification' target='_blank'>странице HTTP-уведомлений</a>"
+
+#: yoomoney_api.admin.inc:310
+msgid "<h3>Payment acceptance settings</h3>"
+msgstr "<h3>Настройки приема платежей</h3>"
+
+#: yoomoney_api.admin.inc:314
+msgid "Wallet number"
+msgstr "Номер кошелька"
+
+#: yoomoney_api.admin.inc:315
+msgid "Your YooMoney wallet number."
+msgstr "Номер кошелька в ЮMoney"
+
+#: yoomoney_api.admin.inc:322;323
+msgid "Codeword"
+msgstr "Секретное слово"
+
+#: yoomoney_api.admin.inc:329
+msgid "Payment comment"
+msgstr "Комментарий к платежу"
+
+#: yoomoney_api.admin.inc:330
+msgid "This title will be shown to the customer"
+msgstr "Это название увидит пользователь"
+
+#: yoomoney_api.admin.inc:338
+msgid "Text for success and fail payment pages"
+msgstr "Текст для страниц успешной и неуспешной оплаты."
+
+#: yoomoney_api.admin.inc:347
+msgid "Text for success page"
+msgstr "Текст для страницы успеха"
+
+#: yoomoney_api.admin.inc:357
+msgid "Text for fail page"
+msgstr "Текст для страницы неуспеха"
+
+#: yoomoney_api.admin.inc:394
+msgid "Payment purpose"
+msgstr "Назначение платежа"
+
+#: yoomoney_api.admin.inc:420;442
+msgid ""
+"Невозможно одновременно включить оплату через ЮMoney и ЮKassa"
+msgstr ""
+"Unable to activate payments via YooMoney and YooKassa at the same "
+"time"
+
+#: yoomoney_api.admin.inc:463
+msgid ""
+"Such shopId does not exist. Please copy this parameter under your <a href=\"https://yoomoney.ru/joinups\">YooKassa's Merchant Profile</a> (at the top of any page)"
+msgstr ""
+"Такого shopId нет. Пожалуйста, скопируйте параметр в <a href=\"https://yoomoney.ru/joinups\">личном кабинете ЮKassa</a> (наверху любой страницы)"
+
+#: yoomoney_api.admin.inc:473
+msgid ""
+" Такого секретного ключа нет. Если вы уверены, что скопировали ключ правильно, значит, он по какой-то причине не работает. Выпустите и активируйте ключ заново — <a href=\"https://yoomoney.ru/joinups\">в личном кабинете ЮKassa</a>"
+msgstr ""
+"Such secret key does not exist. If you are sure you copied the key correctly, this means it does not work for some reason. Issue and activate the key again—under your <a href=\"https://yoomoney.ru/joinups\">Merchant Profile</a>"
+
+#: yoomoney_api.admin.inc:499
+msgid "Wallet number field is missing"
+msgstr "Заполните поле Номер кошелька"
+
+#: yoomoney_api.admin.inc:506
+msgid "Codeword field is missing"
+msgstr "Заполните поле Секретное слово"
+
+#: yoomoney_api.admin.inc:513
+msgid "Payment comment field is missing"
+msgstr "Заполните поле Комментарий платежа"
+
+#: yoomoney_api.admin.inc:523
+msgid "Payment ID field is missing"
+msgstr "Заполните поле Идентификатор платежки"
+
+#: yoomoney_api.admin.inc:530
+msgid "Purpose of payment field is missing"
+msgstr "Заполните поле Назначение платежа"
+
+#: yoomoney_api.module:37
+msgid "Access YooMoney transaction"
+msgstr "Access YooMoney transaction"
+
+#: yoomoney_api.module:38
+msgid "Display the YooMoney transaction."
+msgstr "Display the YooMoney transaction."
+
+#: yoomoney_api.module:41
+msgid "Access own YooMoney transaction"
+msgstr "Access own YooMoney transaction"
+
+#: yoomoney_api.module:42
+msgid "Display the YooMoney transaction by own user."
+msgstr "Display the YooMoney transaction by own user."
+
+#: yoomoney_api.module:45
+msgid "Access YooMoney API"
+msgstr "Access YooMoney API"
+
+#: yoomoney_api.module:46
+msgid "Access to YooMoney API variables."
+msgstr "Access to YooMoney API variables."
+
+#: yoomoney_api.module:76 yoomoney_api.info:0
+msgid "YooMoney Core"
+msgstr "YooMoney Core"
+
+#: yoomoney_api.module:77
+msgid "YooMoney base settings page."
+msgstr "YooMoney base settings page."
+
+#: yoomoney_api.module:87
+msgid "YooMoney transactions "
+msgstr "YooMoney transactions "
+
+#: yoomoney_api.module:88
+msgid "YooMoney all transactions page."
+msgstr "YooMoney all transactions page."
+
+#: yoomoney_api.module:97
+msgid "My transactions"
+msgstr "My transactions"
+
+#: yoomoney_api.module:98
+msgid "YooMoney user transactions page."
+msgstr "YooMoney user transactions page."
+
+#: yoomoney_api.module:564
+msgid "Congratulations!"
+msgstr "Congratulations!"
+
+#: yoomoney_api.module:581
+msgid "Sorry!"
+msgstr "Sorry!"
+
+#: yoomoney_api.module:874
+msgid "Payment from a YooMoney e-wallet"
+msgstr "Кошелек ЮMoney"
+
+#: yoomoney_api.module:875
+msgid "Payment by any bank card"
+msgstr "Банковские карты"
+
+#: yoomoney_api.module:876
+msgid "Payment in cash via retailers and payment kiosks"
+msgstr "Наличные через терминалы"
+
+#: yoomoney_api.module:877
+msgid "Payment from a WebMoney e-wallet"
+msgstr "WebMoney"
+
+#: yoomoney_api.module:878
+msgid "Payment via Alfa-Click"
+msgstr "Альфа-Клик"
+
+#: yoomoney_api.module:879
+msgid "Payment via Sberbank: payment by text messages or Sberbank Online"
+msgstr "Сбербанк Онлайн"
+
+#: yoomoney_api.module:882
+msgid "Payment via QIWI Wallet"
+msgstr "QIWI"
+
+#: yoomoney_api.module:794
+msgid "Installments"
+msgstr "Заплатить по частям"
+
+#: yoo_commerce_api.module:94
+msgid "Installments (%s ₽ per month)"
+msgstr "Заплатить по частям (%s ₽ в месяц)"
+
+#: yoomoney_api.module:994;1000 yoo_ubercart_api.module:271
+msgid "Payments for order No"
+msgstr "Платеж для заказа order ."
+
+#: yoomoney_api.info:0
+msgid "YooMoney core module."
+msgstr "ЮMoney"
+
+#: yoomoney_api.info:0 yoo_commerce_api.module:39 yoo_commerce_api.info:0
+#: yoo_ubercart_api.info:0
+msgid "YooMoney"
+msgstr "ЮMoney"
+
+#: yoo_commerce_api.module:29 yoo_ubercart_api.module:29
+msgid "YooKassa (bank card, e-money, etc.)"
+msgstr "ЮKassa (банковские карты, электронные деньги и другое)"
+
+#: yoo_commerce_api.module:31 yoo_ubercart_api.module:31
+msgid "YooMoney (bank card, e-wallet)"
+msgstr "ЮMoney (банковские карты, кошелек)"
+
+#: yoo_commerce_api.module:40
+msgid "YooMoney"
+msgstr "ЮMoney"
+
+#: yoo_commerce_api.module:42
+msgid "Integration with YooMoney."
+msgstr "Интеграция с ЮMoney."
+
+#: yoo_commerce_api.module:59
+msgid "Widget type"
+msgstr "Тип виджета"
+
+#: yoo_commerce_api.module:103;123;155 yoo_ubercart_api.module:329
+msgid "Payer's full name"
+msgstr "Ф.И.О плательщика"
+
+#: yoo_commerce_api.module:109;134;182 yoo_ubercart_api.module:307;337
+msgid "Select your payment type:"
+msgstr "Выберите метод оплаты:"
+
+#: yoo_commerce_api.module:207
+msgid "The login in Alfa-Click field is filled incorrectly."
+msgstr "Поле логин в Альфа клике заполнено неверно"
+
+#: yoo_commerce_api.module:218;344 yoo_ubercart_api.module:211
+msgid "The phone number field is filled incorrectly."
+msgstr "Поле телефон заполнено неверно."
+
+#: yoo_commerce_api.module:233 yoo_ubercart_api.module:372
+msgid "Payer's name is entered incorrectly."
+msgstr "Ф.И.О. плательщика введено не верно."
+
+#: yoo_commerce_api.module:324
+msgid "Smart payment"
+msgstr "Умный платеж"
+
+#: yoo_commerce_api.module:286;306
+msgid "Unable to create payment."
+msgstr "Неудалось создать платеж."
+
+#: yoo_commerce_api.module:312
+msgid "Unable to pay with this method."
+msgstr "Не удалось заплатить этим методом."
+
+#: yoo_commerce_api.module:336 yoo_ubercart_api.module:204
+msgid "The login field is filled incorrectly."
+msgstr "Поле логин заполнено неверно."
+
+#: yoo_commerce_api.module:446 yoo_ubercart_api.module:69;120
+msgid "Can not save transaction."
+msgstr "Не удалось сохранить транзакцию."
+
+#: yoo_commerce_api.module:452;455 yoo_ubercart_api.module:72;123;75;126
+msgid "Payment failed: %message"
+msgstr "Не удалось создать платеж: %message"
+
+#: yoo_commerce_api.module:482 yoo_ubercart_api.module:181
+msgid "Submit order"
+msgstr "Подтвердить заказ"
+
+#: yoo_commerce_api.module:559
+msgid "Can not find order with id "
+msgstr "Не возжно найти заказ с идентификатором "
+
+#: yoo_commerce_api.module:692 yoo_ubercart_api.module:516
+msgid "Specify the login, and we'll send the bill in Alfa-Click. All you have do after that is confirm the payment online at the bank's website."
+msgstr "Укажите логин, и мы выставим счет в Альфа-Клике. После этого останется подтвердить платеж на сайте интернет-банка."
+
+#: yoo_commerce_api.module:697 yoo_ubercart_api.module:521
+msgid "Phone number linked to Qiwi Wallet"
+msgstr "Телефон, который привязан к Qiwi Wallet"
+
+#: yoo_commerce_api.module:455
+msgid "yoo_commerce_api"
+msgstr "yoo_commerce_api"
+
+#: yoo_commerce_api.info:0
+msgid "YooMoney Commerce Api"
+msgstr "YooMoney Commerce Api"
+
+#: yoo_commerce_api.info:0
+msgid "YooMoney module for Drupal Commerce."
+msgstr "YooMoney module for Drupal Commerce."
+
+#: yoo_ubercart_api.module:38
+msgid "YooMoney"
+msgstr "YooMoney"
+
+#: yoo_ubercart_api.module:40
+msgid "YooMoney gateway"
+msgstr "YooMoney gateway"
+
+#: yoo_ubercart_api.module:41
+msgid "Redirect to YooMoney to pay by credit card or pay terminals or e-money."
+msgstr "Redirect to YooMoney to pay by card or payment kiosks or e-money."
+
+#: yoo_ubercart_api.module:142
+msgid "Process payment"
+msgstr "Process payment"
+
+#: yoo_ubercart_api.module:381
+msgid "You shop ID. If you have any shops in you YooKassa account"
+msgstr "Your shop ID. If you have any stores in your YooKassa account"
+
+#: yoo_ubercart_api.module:75;126
+msgid "yoo_ubercart"
+msgstr "yoo_ubercart"
+
+#: yoo_ubercart_api.info:0
+msgid "YooMoney Ubercart Api"
+msgstr "YooMoney Ubercart Api"
+
+#: yoo_ubercart_api.info:0
+msgid "YooMoney module for Ubercart."
+msgstr "YooMoney module for Ubercart."
+
+#: yoomoney_api.admin.inc:128
+msgid "Transaction data"
+msgstr "Описание платежа"
+
+#: yoomoney_api.admin.inc:134
+msgid "Full description of the transaction that the user will see during the checkout process. You can find it in your YooKassa Merchant Profile. For example, \"Payment for order No. 72 by user@yoomoney.ru\". Limitations: no more than 128 symbols"
+msgstr ""
+"Это описание транзакции, которое пользователь увидит при оплате, а вы — в личном кабинете ЮKassa. Например, «Оплата заказа №72».<br>"
+"Чтобы в описание подставлялся номер заказа (как в примере), поставьте на его месте %order_id% (Оплата заказа №%order_id%).<br>"
+"Ограничение для описания — 128 символов."
+
+msgid "Full description of the transaction that the user will see during the checkout process. You can find it in your YooKassa Merchant Profile. For example, \"Payment for order No. 72 by user@yoomoney.ru\". Limitations: no more than 128 symbols."
+msgstr ""
+"Это описание транзакции, которое пользователь увидит при оплате, а вы — в личном кабинете ЮKassa. Например, «Оплата заказа №72».<br>"
+"Чтобы в описание подставлялся номер заказа (как в примере), поставьте на его месте %order_number% (Оплата заказа №%order_number%).<br>"
+"Ограничение для описания — 128 символов."
+
+#: yoomoney_api.admin.inc:131
+msgid "Payment for order No. %order_id%"
+msgstr "Оплата заказа №%order_id%"
+
+#: yoomoney_api.admin.inc:131
+msgid "Payment for order No. %order_number%"
+msgstr "Оплата заказа №%order_number%"
+
+msgid "Tinkoff online banking"
+msgstr "Интернет-банк Тинькофф"
+
+msgid "Second receipt sent. Amount %s rubles"
+msgstr "Отправлен второй чек. Сумма %s рублей."

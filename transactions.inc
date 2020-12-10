@@ -4,9 +4,9 @@
  */
 
 /**
- * Class YAMoneyApiTransaction
+ * Class YooMoneyApiTransaction
  */
-class YAMoneyApiTransaction extends stdClass {
+class YooMoneyApiTransaction extends stdClass {
   const STATUS_IN_PROCESS = 'in_process';
   const STATUS_PROCESSED  = 'processed';
   const STATUS_PAYED      = 'payed';
@@ -52,7 +52,7 @@ class YAMoneyApiTransaction extends stdClass {
    *
    */
   public function __construct() {
-    $this->status = YAMoneyApiTransaction::STATUS_IN_PROCESS;
+    $this->status = YooMoneyApiTransaction::STATUS_IN_PROCESS;
     $this->created = time();
     $this->data = array();
     $this->payment_id = '';
@@ -61,10 +61,10 @@ class YAMoneyApiTransaction extends stdClass {
 
 /**
  * @param int $ymid Transaction id.
- * @return YAMoneyApiTransaction
+ * @return YooMoneyApiTransaction
  */
-function yamoney_api_transaction_load($ymid) {
-  $row = $transaction = db_select('yamoney_api_transaction', 'yt')
+function yoomoney_api_transaction_load($ymid) {
+  $row = $transaction = db_select('yoomoney_api_transaction', 'yt')
     ->fields('yt')
     ->condition('yt.ymid', $ymid)
     ->execute()
@@ -74,7 +74,7 @@ function yamoney_api_transaction_load($ymid) {
     return NULL;
   }
 
-  $transaction = new YAMoneyApiTransaction();
+  $transaction = new YooMoneyApiTransaction();
   foreach ($row as $key => $value) {
     $transaction->{$key} = $value;
   }
@@ -86,10 +86,10 @@ function yamoney_api_transaction_load($ymid) {
 
 /**
  * @param int $order_id Order id.
- * @return YAMoneyApiTransaction
+ * @return YooMoneyApiTransaction
  */
-function yamoney_api_transaction_load_by_order($order_id) {
-    $row = $transaction = db_select('yamoney_api_transaction', 'yt')
+function yoomoney_api_transaction_load_by_order($order_id) {
+    $row = $transaction = db_select('yoomoney_api_transaction', 'yt')
         ->fields('yt')
         ->condition('yt.order_id', $order_id)
         ->execute()
@@ -99,7 +99,7 @@ function yamoney_api_transaction_load_by_order($order_id) {
         return NULL;
     }
 
-    $transaction = new YAMoneyApiTransaction();
+    $transaction = new YooMoneyApiTransaction();
     foreach ($row as $key => $value) {
         $transaction->{$key} = $value;
     }
@@ -111,10 +111,10 @@ function yamoney_api_transaction_load_by_order($order_id) {
 
 /**
  * @param string $payment_id
- * @return YAMoneyApiTransaction
+ * @return YooMoneyApiTransaction
  */
-function yamoney_api_transaction_load_by_payment($payment_id) {
-    $row = $transaction = db_select('yamoney_api_transaction', 'yt')
+function yoomoney_api_transaction_load_by_payment($payment_id) {
+    $row = $transaction = db_select('yoomoney_api_transaction', 'yt')
         ->fields('yt')
         ->condition('yt.payment_id',$payment_id)
         ->execute()
@@ -124,7 +124,7 @@ function yamoney_api_transaction_load_by_payment($payment_id) {
         return NULL;
     }
 
-    $transaction = new YAMoneyApiTransaction();
+    $transaction = new YooMoneyApiTransaction();
     foreach ($row as $key => $value) {
         $transaction->{$key} = $value;
     }
@@ -135,22 +135,22 @@ function yamoney_api_transaction_load_by_payment($payment_id) {
 }
 
 /**
- * @param YAMoneyApiTransaction $transaction
+ * @param YooMoneyApiTransaction $transaction
  * @return bool
  */
-function yamoney_api_transaction_save(YAMoneyApiTransaction $transaction) {
+function yoomoney_api_transaction_save(YooMoneyApiTransaction $transaction) {
   $fields = (array) $transaction;
   $fields['data'] = serialize($transaction->data);
 
   if ($transaction->ymid) {
-    return !!db_update('yamoney_api_transaction')
+    return !!db_update('yoomoney_api_transaction')
       ->fields($fields)
       ->condition('ymid', $transaction->ymid)
       ->execute();
   }
   else {
     unset($fields['ymid']);
-    $id = db_insert('yamoney_api_transaction')
+    $id = db_insert('yoomoney_api_transaction')
       ->fields($fields)
       ->execute();
 
@@ -165,8 +165,8 @@ function yamoney_api_transaction_save(YAMoneyApiTransaction $transaction) {
  * @param $payment_id string Payment id
  * @return bool
  */
-function yamoney_api_update_transaction_payment_id($ymid, $payment_id) {
-    return !!db_update('yamoney_api_transaction')
+function yoomoney_api_update_transaction_payment_id($ymid, $payment_id) {
+    return !!db_update('yoomoney_api_transaction')
         ->fields(array('payment_id' => $payment_id))
         ->condition('ymid', $ymid)
         ->execute();
@@ -178,8 +178,8 @@ function yamoney_api_update_transaction_payment_id($ymid, $payment_id) {
  * @param $status string Transaction status.
  * @return bool
  */
-function yamoney_api_update_transaction_status($payment_id, $status) {
-  return !!db_update('yamoney_api_transaction')
+function yoomoney_api_update_transaction_status($payment_id, $status) {
+  return !!db_update('yoomoney_api_transaction')
     ->fields(array('status' => $status))
     ->condition('payment_id', $payment_id)
     ->execute();
@@ -191,8 +191,8 @@ function yamoney_api_update_transaction_status($payment_id, $status) {
  * @param $amount
  * @return bool
  */
-function yamoney_api_update_transaction_amount($payment_id, $amount) {
-    return !!db_update('yamoney_api_transaction')
+function yoomoney_api_update_transaction_amount($payment_id, $amount) {
+    return !!db_update('yoomoney_api_transaction')
         ->fields(array('amount' => $amount))
         ->condition('payment_id', $payment_id)
         ->execute();
@@ -203,8 +203,8 @@ function yamoney_api_update_transaction_amount($payment_id, $amount) {
  * @param int $ymid
  * @return bool
  */
-function yamoney_api_transaction_delete($ymid) {
-  return !!db_delete('yamoney_api_transaction')
+function yoomoney_api_transaction_delete($ymid) {
+  return !!db_delete('yoomoney_api_transaction')
     ->condition('ymid', $ymid)
     ->execute();
 }
@@ -213,20 +213,20 @@ function yamoney_api_transaction_delete($ymid) {
  * Render all transactions page
  * @return mixed
  */
-function yamoney_api_transactions_page()
+function yoomoney_api_transactions_page()
 {
-    $transactions = db_select('yamoney_api_transaction', 'yt')
+    $transactions = db_select('yoomoney_api_transaction', 'yt')
         ->fields('yt')
         ->extend('PagerDefault')// this adds the pager
         ->orderBy('ymid', 'DESC')
         ->limit(20);
     $transactions = $transactions->execute()->fetchAll();
 
-    $table  = yamoney_api_create_transaction_table($transactions);
+    $table  = yoomoney_api_create_transaction_table($transactions);
     $output = drupal_render($table);
     drupal_set_title(t('Transactions'));
     drupal_add_js('
-        function yamoney_api_capture_payment_request() {
+        function yoomoney_api_capture_payment_request() {
             document.getElementsByTagName("body")[0].style.cursor = "wait";
             let paymentId = this.dataset.paymentId;
             let r = new XMLHttpRequest();
@@ -234,7 +234,7 @@ function yamoney_api_transactions_page()
             el.innerText = this.text;
             this.parentElement.insertBefore(el, this);
             this.style.display = "none";
-            r.open("POST", "'.url('admin/yamoney_api/actions').'", true);
+            r.open("POST", "'.url('admin/yoomoney_api/actions').'", true);
             r.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
             r.onreadystatechange = function () {
                 if (r.readyState !== 4) {
@@ -242,7 +242,7 @@ function yamoney_api_transactions_page()
                 }
                 document.getElementsByTagName("body")[0].style.cursor = "default";
                 if(r.status === 200 && r.responseText === "OK") { 
-                    alert("'.t('Вы подтвердили платёж в Яндекс.Кассе.').'");
+                    alert("'.t('Вы подтвердили платёж в ЮKassa.').'");
                 } else {
                     alert("'.t('Платёж не подтвердился. Попробуйте ещё раз.').'");
                 }
@@ -251,7 +251,7 @@ function yamoney_api_transactions_page()
             r.send("action=capturePayment&paymentId=" + this.dataset.paymentId 
                     + "&module=" + this.dataset.module);    
         }
-        function yamoney_api_cancel_payment_request() {
+        function yoomoney_api_cancel_payment_request() {
             document.getElementsByTagName("body")[0].style.cursor = "wait";
             let paymentId = this.dataset.paymentId;
             let r = new XMLHttpRequest();
@@ -259,7 +259,7 @@ function yamoney_api_transactions_page()
             el.innerText = this.text;
             this.parentElement.insertBefore(el, this);
             this.style.display = "none";
-            r.open("POST", "'.url('admin/yamoney_api/actions').'", true);
+            r.open("POST", "'.url('admin/yoomoney_api/actions').'", true);
             r.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
             r.onreadystatechange = function () {
                 if (r.readyState !== 4) {
@@ -267,7 +267,7 @@ function yamoney_api_transactions_page()
                 }
                 document.getElementsByTagName("body")[0].style.cursor = "default";
                 if(r.status === 200 && r.responseText === "OK") {
-                    alert("'.t('Вы отменили платёж в Яндекс.Кассе. Деньги вернутся клиенту.').'");
+                    alert("'.t('Вы отменили платёж в ЮKassa. Деньги вернутся клиенту.').'");
                 } else {
                     alert("'.t('Платёж не отменился. Попробуйте ещё раз.').'");
                 }
@@ -277,11 +277,11 @@ function yamoney_api_transactions_page()
                     + "&module=" + this.dataset.module);    
         }
         document.addEventListener("DOMContentLoaded", function() {
-           [].forEach.call(document.getElementsByClassName("yamoney_api_capture_request_link"), function(el) {
-              el.addEventListener("click", yamoney_api_capture_payment_request);
+           [].forEach.call(document.getElementsByClassName("yoomoney_api_capture_request_link"), function(el) {
+              el.addEventListener("click", yoomoney_api_capture_payment_request);
            });
-           [].forEach.call(document.getElementsByClassName("yamoney_api_cancel_request_link"), function(el) {
-              el.addEventListener("click", yamoney_api_cancel_payment_request);
+           [].forEach.call(document.getElementsByClassName("yoomoney_api_cancel_request_link"), function(el) {
+              el.addEventListener("click", yoomoney_api_cancel_payment_request);
            });
         });', 'inline');
     return $output;
@@ -292,8 +292,8 @@ function yamoney_api_transactions_page()
  * @param stdClass $user
  * @return bool|string
  */
-function yamoney_api_transactions_user_page($user) {
-  $transactions = db_select('yamoney_api_transaction', 'yt')
+function yoomoney_api_transactions_user_page($user) {
+  $transactions = db_select('yoomoney_api_transaction', 'yt')
     ->fields('yt')
     ->condition('uid', $user->uid)
     ->extend('PagerDefault') // this adds the pager
@@ -301,7 +301,7 @@ function yamoney_api_transactions_user_page($user) {
     ->limit(20);
   $transactions = $transactions->execute()->fetchAll();
 
-  $table = yamoney_api_create_transaction_table($transactions);
+  $table = yoomoney_api_create_transaction_table($transactions);
   $output = drupal_render($table);
   drupal_set_title(t('My transactions'));
   return $output;
@@ -312,17 +312,17 @@ function yamoney_api_transactions_user_page($user) {
  * @param array $table_rows
  * @return array
  */
-function yamoney_api_create_transaction_table($table_rows) {
+function yoomoney_api_create_transaction_table($table_rows) {
   $rows = array();
   if (count($table_rows) > 0) {
     foreach ($table_rows as $item) {
-      $row = yamoney_api_transaction_build_payment_row((array)$item);
+      $row = yoomoney_api_transaction_build_payment_row((array)$item);
       $orderId = $row['order_id'];
       $actions = '';
         $module = '';
         if (module_exists('commerce')
             && commerce_order_load($row['order_id'])
-            && yaCommerceApiPaymentTransactioLoad($row['payment_id'])
+            && yooCommerceApiPaymentTransactioLoad($row['payment_id'])
         ) {
             $module          = 'commerce';
             $row['order_id'] = l($row['order_id'], 'admin/commerce/orders/'.$orderId);
@@ -334,15 +334,15 @@ function yamoney_api_create_transaction_table($table_rows) {
             $row['order_id'] = l($row['order_id'], 'admin/store/orders/'.$orderId);
             $actions         .= l(t('View'), 'admin/store/orders/'.$orderId).' ';
         }
-        if ($row['status'] === \YandexCheckout\Model\PaymentStatus::WAITING_FOR_CAPTURE) {
+        if ($row['status'] === \YooKassa\Model\PaymentStatus::WAITING_FOR_CAPTURE) {
             if ($module) {
                 if ($module === 'commerce') {
                     $actions .= l(t('Edit'), 'admin/commerce/orders/'.$orderId.'/edit');
                 } elseif ($module === 'uc_payment') {
                     $actions .= l(t('Edit'), 'admin/store/orders/'.$orderId.'/edit');
                 }
-                $actions .= ' <a href="javascript:void(0);" class="yamoney_api_capture_request_link" data-payment-id="'.$row['payment_id'].'" data-module="'.$module.'">'.t('Confirm').'</a> ';
-                $actions .= '<a href="javascript:void(0);" class="yamoney_api_cancel_request_link" data-payment-id="'.$row['payment_id'].'" data-module="'.$module.'">'.t('Cancel').'</a>';
+                $actions .= ' <a href="javascript:void(0);" class="yoomoney_api_capture_request_link" data-payment-id="'.$row['payment_id'].'" data-module="'.$module.'">'.t('Confirm').'</a> ';
+                $actions .= '<a href="javascript:void(0);" class="yoomoney_api_cancel_request_link" data-payment-id="'.$row['payment_id'].'" data-module="'.$module.'">'.t('Cancel').'</a>';
             }
         }
         $row[]  = $actions;
@@ -373,7 +373,7 @@ function yamoney_api_create_transaction_table($table_rows) {
  * @param array $row
  * @return array
  */
-function yamoney_api_transaction_build_payment_row($row) {
+function yoomoney_api_transaction_build_payment_row($row) {
   unset($row['data']);
   foreach ($row as $key => $item) {
     if ($key == 'uid') {
