@@ -1,0 +1,917 @@
+<?php
+
+use YooKassa\Common\Exceptions\ApiException;
+use YooKassa\Model\Payment;
+use YooKassa\Model\PaymentStatus;
+use YooKassa\Request\Payments\CreatePaymentRequest;
+use YooKassa\Request\Payments\CreatePaymentRequestBuilder;
+use YooKassa\Request\Payments\CreatePaymentRequestSerializer;
+use YooKassa\Request\Payments\Payment\CreateCaptureRequest;
+use YooKassa\Request\Payments\Payment\CreateCaptureRequestBuilder;
+
+$modulePath = drupal_get_path('module', 'yoomoney_api');
+require_once $modulePath.DIRECTORY_SEPARATOR.'YooMoneyLogger.php';
+require_once $modulePath.DIRECTORY_SEPARATOR.'YooMoneyInstallments.php';
+
+/**
+ * Implements hook_commerce_order_presave().
+ */
+function yoo_commerce_api_commerce_order_presave($order)
+{
+    if (empty($order->original)) {
+        return;
+    }
+
+    if ($order->status == $order->original->status) {
+        return;
+    }
+
+    if (!yoomoney_api_is_need_second_receipt($order->status)) {
+        return;
+    }
+
+    $orderInfo = array(
+        'order_id'   => $order->order_id,
+        'user_email' => empty($order->mail) ? null : $order->mail,
+        'user_phone' => empty($order->phone) ? null : $order->phone,
+    );
+
+    $result = yoomoney_api_send_second_receipt($orderInfo);
+
+    if (!$result->is_send) {
+        return;
+    }
+
+    $order->log = $result->message;
+}
+
+
+/**
+ * Implements hook_commerce_payment_method_info().
+ */
+function yoo_commerce_api_commerce_payment_method_info()
+{
+    $payment_methods = array();
+    $icon_name       = (variable_get('yoomoney_api_shop', 0) == 0) ? 'yoomoney-logo' : 'yookassa-logo';
+    $icon            = theme(
+        'image',
+        array(
+            'path'       => drupal_get_path('module', 'yoo_commerce_api').'/images/'.$icon_name.'.png',
+            'attributes' => array('class' => array('yoo-commerce-logo')),
+        )
+    );
+
+    $display_title = '';
+    if (variable_get('yoomoney_api_shop', 0)) {
+        $display_title = t('YooKassa (bank card, e-money, etc.)');
+    } else if (variable_get('yoomoney_api_p2p', 0)) {
+        $display_title = t('YooMoney (bank card, e-wallet)');
+    }
+
+    $display_title                      .= '<br/>'.$icon;
+    $payment_methods['yoo_commerce_api'] = array(
+        'base'                 => 'yoo_commerce_api',
+        'title'                => t('YooMoney'),
+        'short_title'          => t('YooMoney'),
+        'display_title'        => $display_title,
+        'description'          => t('Integration with YooMoney.'),
+        'terminal'             => false,
+        'offsite'              => true,
+        'offsite_autoredirect' => true,
+        'active'               => true,
+    );
+
+    return $payment_methods;
+}
+
+/**
+ * Implements hook_commerce_payment_method_settings_form().
+ */
+function yoo_commerce_api_settings_form($settings = array())
+{
+    $form['widget'] = array(
+        '#type'          => 'radios',
+        '#title'         => t('Widget type'),
+        '#default_value' => isset($settings['widget']) ? $settings['widget'] : 'select',
+        '#options'       => array(
+            'select' => 'Select list',
+            'radios' => 'Radio buttons',
+            'images' => 'Images',
+        ),
+    );
+
+    return $form;
+}
+
+/**
+ * Payment method callback: checkout form.
+ */
+function yoo_commerce_api_submit_form($payment_method, $pane_values, $checkout_pane, $order)
+{
+    $form = array();
+
+    $disabled    = false;
+    $methods     = yoomoney_api_get_enabled_payment_methods();
+    $wrapper     = entity_metadata_wrapper('commerce_order', $order);
+    $order_total = $wrapper->commerce_order_total->value();
+    $amount      = commerce_currency_amount_to_decimal($order_total['amount'], $order_total['currency_code']);
+    if ($amount < YOOMONEY_API_INSTALLMENTS_MIN_AMOUNT) {
+        unset($methods[\YooKassa\Model\PaymentMethodType::INSTALLMENTS]);
+    }
+    if (isset($methods[\YooKassa\Model\PaymentMethodType::INSTALLMENTS])) {
+        $shopId             = variable_get('yoomoney_api_shop_id');
+        $monthlyInstallment = YooMoneyInstallments::creditPreSchedule($shopId, $amount);
+        if (!empty($monthlyInstallment['amount'])) {
+            $methods[\YooKassa\Model\PaymentMethodType::INSTALLMENTS] = sprintf(
+                t('Installments (%s ₽ per month)'),
+                $monthlyInstallment['amount']
+            );
+        } else {
+            $errorMessage = YooMoneyInstallments::getLastError() ?: 'Unknown error. Could not get installment amount';
+            YooMoneyLogger::error($errorMessage);
+        }
+    }
+
+    if (count($methods) === 1) {
+        $disabled = true;
+    }
+
+    if (variable_get('yoomoney_api_paymode') == 'kassa' && variable_get('yoomoney_api_shop', 0)) {
+        return;
+    }
+
+    $defaultValue = isset($pane_values['payment_details']['payment_method'])
+        ? $pane_values['payment_details']['payment_method']
+        : variable_get('yoomoney_api_default_payment_method', YOOMONEY_API_DEFAULT_PAYMENT_METHOD);
+    if (!isset($methods[$defaultValue])) {
+        $defaultValue = isset($methods[YOOMONEY_API_DEFAULT_PAYMENT_METHOD])
+            ? YOOMONEY_API_DEFAULT_PAYMENT_METHOD
+            : key($methods);
+    }
+
+    if (!isset($payment_method['settings']['widget'])) {
+        $payment_method['settings']['widget'] = 'radios';
+    }
+
+    switch ($payment_method['settings']['widget']) {
+        case 'select':
+            $form['payment_method'] = array(
+                '#type'          => 'radios',
+                '#title'         => t('Select your payment type:'),
+                '#default_value' => $defaultValue,
+                '#options'       => $methods,
+                '#disabled'      => $disabled,
+                '#theme'         => 'form_radios_element',
+            );
+
+            break;
+
+        case 'radios':
+            $options = array();
+            foreach ($methods as $key => $title) {
+                $options[$key] = '<span class="yoo-commerce__method yoo-commerce__method_'.$key.'">'.$title.'</span>';
+            }
+
+            $form['payment_method'] = array(
+                '#type'          => 'radios',
+                '#title'         => t('Select your payment type:'),
+                '#default_value' => $defaultValue,
+                '#options'       => $options,
+                '#disabled'      => $disabled,
+                '#prefix'        => '<div id="ym-payment_methods">',
+                '#theme'         => 'form_radios_element',
+                '#ajax'          => array(
+                    'callback' => 'yoo_commerce_ajax_payment_method_form_callback',
+                    'method'   => 'replace',
+                    'effect'   => 'fade',
+                    'wrapper'  => 'ym-payment_methods',
+                ),
+            );
+
+            break;
+
+        case 'images':
+
+            $options = array();
+            $path    = drupal_get_path('module', 'yoo_commerce_api').'/images/';
+            foreach ($methods as $key => $title) {
+                $options[$key] = '';
+
+                $options[$key] = '<span class=" yoo-commerce__method_'.$key.'">';
+
+                $options[$key] = theme(
+                    'image',
+                    array(
+                        'path'       => $path.'icon-'.$key.'.png',
+                        'attributes' => array(
+                            'class' => array('yoo-commerce__method-icon'),
+                        ),
+                    )
+                );
+
+                $options[$key] .= '<span class="yoo-commerce__method-title">'.$title.'</span>';
+
+                $options[$key] .= '</span>';
+            }
+            $form['payment_method'] = array(
+                '#type'          => 'radios',
+                '#title'         => t('Select your payment type:'),
+                '#default_value' => $defaultValue,
+                '#options'       => $options,
+                '#disabled'      => $disabled,
+                '#theme'         => 'form_radios_element',
+            );
+
+            break;
+    }
+
+    return $form;
+}
+
+function yoo_commerce_api_submit_form_validate(
+    $payment_method,
+    $pane_form,
+    $pane_values,
+    $order,
+    $form_parents = array()
+) {
+    if (variable_get('yoomoney_api_shop') == 1) {
+        if (!isset($pane_values['payment_method'])) {
+            return true;
+        }
+        if ($pane_values['payment_method'] == 'alfabank') {
+            if (isset($_POST['alfabank_login']) && $_POST['alfabank_login'] !== '') {
+                return true;
+            } else {
+                drupal_set_message(t('The login in Alfa-Click field is filled incorrectly.'), 'error');
+
+                return false;
+            }
+        } elseif ($pane_values['payment_method'] == 'qiwi') {
+            if (isset($_POST['qiwi_phone'])) {
+                $phone = $_POST['qiwi_phone'];
+                $phone = preg_replace('/[^\d]/', '', $phone);
+                if ($phone && preg_match('/^[0-9]{4,15}$/', $phone)) {
+                    return true;
+                } else {
+                    drupal_set_message(t("The phone number field is filled incorrectly."), 'error');
+
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
+    } else {
+        if (isset($pane_values['customer_name'])) {
+            $customerName = trim($pane_values['customer_name']);
+            $parts        = preg_split('/\s+/', $customerName);
+            if ($customerName
+                && count($parts) != 3
+            ) {
+                form_set_error('customer_name', t('Payer\'s name is entered incorrectly.'));
+
+                return false;
+            }
+        }
+    }
+}
+
+/**
+ * Payment method callback: checkout form submission.
+ *
+ * @param $payment_method
+ * @param $pane_form
+ * @param $pane_values
+ * @param $order
+ * @param $charge
+ */
+function yoo_commerce_api_submit_form_submit($payment_method, $pane_form, $pane_values, $order, $charge)
+{
+    global $user;
+    if (variable_get('yoomoney_api_shop', 1)) {
+        $modulePath = drupal_get_path('module', 'yoomoney_api');
+        require_once $modulePath.DIRECTORY_SEPARATOR.'vendor'.DIRECTORY_SEPARATOR.'autoload.php';
+        $apiClient = yoomoney_api__common__get_api_client();
+
+        $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
+        $currency_code = $order_wrapper->commerce_order_total->currency_code->value();
+        $amount        = $order_wrapper->commerce_order_total->amount->value();
+        $amount        = round(commerce_currency_amount_to_decimal($amount, $currency_code), 2);
+
+        if (variable_get('yoomoney_api_paymode') == 'kassa') {
+            $paymentMethod = '';
+        } else {
+            $paymentMethod = $pane_values['payment_method'];
+            if (!$paymentMethod) {
+                $paymentMethod = variable_get('yoomoney_api_default_payment_method', YOOMONEY_API_DEFAULT_PAYMENT_METHOD);
+            };
+        }
+
+        $builder        = yoo_commerce_api_get_create_payment_request_builder($order, $amount, $paymentMethod,
+            $order_wrapper);
+        $paymentRequest = $builder->build();
+
+        if ($paymentRequest->getReceipt() !== null) {
+            $paymentRequest->getReceipt()->normalize($paymentRequest->getAmount());
+        }
+
+        $serializer     = new CreatePaymentRequestSerializer();
+        $serializedData = $serializer->serialize($paymentRequest);
+        YooMoneyLogger::info('Create payment request: '.json_encode($serializedData));
+        try {
+            $response = $apiClient->createPayment($paymentRequest);
+            if ($response && $response->status !== PaymentStatus::CANCELED) {
+                $transaction                = commerce_payment_transaction_new($payment_method['method_id'],
+                    $order->order_id);
+                $transaction->instance_id   = $payment_method['instance_id'];
+                $transaction->remote_id     = $response->id;
+                $transaction->amount        = intval($amount) * 100;
+                $transaction->currency_code = $currency_code;
+                $transaction->status        = COMMERCE_PAYMENT_STATUS_PENDING;
+                $transaction->remote_status = $response->getStatus();
+                $transaction->message       = $response->getPaymentMethod() ? $response->getPaymentMethod()->getType() : t('Smart payment');
+                commerce_order_status_update($order, YOOMONEY_API_ORDER_STATUS_PENDING);
+                $ymTransaction             = new YooMoneyApiTransaction();
+                $ymTransaction->uid        = isset($user->uid) ? $user->uid : 0;
+                $ymTransaction->amount     = $amount;
+                $ymTransaction->mail       = isset($user->mail) ? $user->mail : $order->mail;
+                $ymTransaction->order_id   = $order->order_id;
+                $ymTransaction->payment_id = $response->getId();
+                $ymTransaction->status     = $response->getStatus();
+                if (commerce_payment_transaction_save($transaction) && commerce_order_save($order)
+                    && yoomoney_api_transaction_save($ymTransaction)
+                ) {
+                    $confirmationUrl = $response->confirmation->confirmationUrl;
+                    drupal_goto($confirmationUrl);
+                }
+            } else {
+                YooMoneyLogger::error('Payment not created. Order id: '.$order->order_number);
+                drupal_set_message(t('Unable to create payment.'), 'error');
+            }
+
+        } catch (ApiException $e) {
+            YooMoneyLogger::error('Api error: '.$e->getMessage());
+            drupal_set_message(t('Unable to pay with this method.'), 'error');
+            drupal_goto(request_uri());
+        }
+    }
+    $order->data['yoo_commerce_api'] = $pane_values;
+}
+
+/**
+ * @param $order
+ * @param $amount
+ * @param string $paymentMethod
+ * @param EntityMetadataWrapper $order_wrapper
+ *
+ * @return \YooKassa\Request\Payments\CreatePaymentRequestBuilder
+ */
+function yoo_commerce_api_get_create_payment_request_builder($order, $amount, $paymentMethod, $order_wrapper)
+{
+    $confirmationType = \YooKassa\Model\ConfirmationType::REDIRECT;
+    if ($paymentMethod == 'alfabank') {
+        $confirmationType = \YooKassa\Model\ConfirmationType::EXTERNAL;
+        $paymentMethod    = new \YooKassa\Model\PaymentData\PaymentDataAlfabank();
+        try {
+            $paymentMethod->setLogin($_POST['alfabank_login']);
+        } catch (Exception $e) {
+            drupal_set_message(t('The login field is filled incorrectly.'), 'error');
+        }
+    } elseif ($paymentMethod == 'qiwi') {
+        $paymentMethod = new \YooKassa\Model\PaymentData\PaymentDataQiwi();
+        try {
+            $phone = preg_replace('/[^\d]/', '', $_POST['qiwi_phone']);
+            $paymentMethod->setPhone($phone);
+        } catch (Exception $e) {
+            drupal_set_message(t("The phone number field is filled incorrectly."), 'error');
+        }
+    }
+    YooMoneyLogger::info('Return url: '.yoo_commerce_api_get_return_url($order));
+    $builder = CreatePaymentRequest::builder()
+                                   ->setAmount($amount)
+                                   ->setPaymentMethodData($paymentMethod)
+                                   ->setCapture(yoomoney_api__common__get_capture_value($paymentMethod))
+                                   ->setDescription(yoo_commerce_api_create_description($order))
+                                   ->setConfirmation(
+                                       array(
+                                           'type'      => $confirmationType,
+                                           'returnUrl' => yoo_commerce_api_get_return_url($order),
+                                       )
+                                   )
+                                   ->setMetadata(array(
+                                       'cms_name'       => 'yoo_api_drupal_commerce',
+                                       'module_version' => YOOMONEY_MODULE_VERSION,
+                                   ));
+
+    yoo_commerce_api_set_receipt_if_needed($builder, $order, $order_wrapper);
+
+    return $builder;
+}
+
+/**
+ * @param CreatePaymentRequestBuilder|CreateCaptureRequestBuilder $builder
+ * @param $order
+ * @param EntityMetadataWrapper $order_wrapper
+ */
+function yoo_commerce_api_set_receipt_if_needed($builder, $order, $order_wrapper)
+{
+    if (!variable_get('yoomoney_api_send_check', false)) {
+        return;
+    }
+
+    $builder->setReceiptEmail($order->mail);
+    foreach ($order_wrapper->commerce_line_items as $delta => $line_item_wrapper) {
+        if ($line_item_wrapper->value()->type == 'product') {
+            $product    = $line_item_wrapper->commerce_product->value();
+            $components = $product->commerce_price['und'][0]['data']['components'];
+            $tax_id     = false;
+            foreach ($components as $component) {
+                $info = explode('|', $component['name']);
+                if (count($info) && $info[0] == 'tax') {
+                    $tax_id = $info[1];
+                    break;
+                }
+            }
+
+            $quantity = $line_item_wrapper->quantity->value();
+            $tax      = $tax_id && variable_get('yoomoney_api_kassa_tax_'.$tax_id)
+                ? variable_get('yoomoney_api_kassa_tax_'.$tax_id)
+                : variable_get('yoomoney_api_kassa_tax_default', YOOMONEY_API_DEFAULT_TAX_RATE_ID);
+            $amount   = commerce_currency_amount_to_decimal(
+                $product->commerce_price['und'][0]['amount'],
+                $product->commerce_price['und'][0]['currency_code']
+            );
+
+            $builder->addReceiptItem($product->title, $amount, $quantity, $tax,
+                variable_get('yoomoney_kassa_payment_mode'),
+                variable_get('yoomoney_kassa_payment_subject'));
+        }
+
+        if ($line_item_wrapper->value()->type == 'shipping') {
+            $shipping = $line_item_wrapper->value();
+            $amount   = commerce_currency_amount_to_decimal(
+                $shipping->commerce_total['und'][0]['amount'],
+                $shipping->commerce_total['und'][0]['currency_code']
+            );
+            $builder->addReceiptShipping('Доставка', $amount, YOOMONEY_API_DEFAULT_TAX_RATE_ID,
+                variable_get('yoomoney_kassa_delivery_payment_mode'),
+                variable_get('yoomoney_kassa_delivery_payment_subject'));
+        }
+    }
+}
+
+/**
+ * Payment method callback: redirect form.
+ *
+ * A wrapper around the module's general use function for building a submit form.
+ */
+function yoo_commerce_api_redirect_form($form, &$form_state, $order, $payment_method)
+{
+    global $user;
+
+    $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
+    $currency_code = $order_wrapper->commerce_order_total->currency_code->value();
+    $amount        = $order_wrapper->commerce_order_total->amount->value();
+    $amount        = round(commerce_currency_amount_to_decimal($amount, $currency_code), 2);
+
+    $transaction           = new YooMoneyApiTransaction();
+    $transaction->uid      = isset($user->uid) ? $user->uid : 0;
+    $transaction->amount   = $amount;
+    $transaction->mail     = isset($user->mail) ? $user->mail : '';
+    $transaction->order_id = $order->order_id;
+
+    if (!yoomoney_api_transaction_save($transaction)) {
+        $error_message = t('Can not save transaction.');
+
+        // create failure commerce transaction
+        yoo_commerce_create_commerce_transaction($transaction, COMMERCE_PAYMENT_STATUS_FAILURE, '');
+
+        // show message to the user
+        drupal_set_message(t('Payment failed: %message', array('%message' => $error_message)), 'error');
+
+        // log error to watchdog
+        watchdog('yoo_commerce_api', 'Payment failed: %message', array('%message' => $error_message), WATCHDOG_WARNING);
+
+        // redirect back to checkout
+        $cancel_url = yoo_commerce_api_get_checkout_url($order, false);
+        drupal_goto($cancel_url);
+    }
+
+    $target_url = yoomoney_api_get_order_submission_url();
+    $params     = yoomoney_api_get_order_submission_params($transaction);
+
+    $form['#action'] = $target_url;
+    foreach ($params as $key => $value) {
+        if ($key == 'fio') {
+            $form[$key] = array(
+                '#type'  => 'hidden',
+                '#value' => $order->data['yoo_commerce_api']['customer_name'],
+            );
+        } else {
+            $form[$key] = array(
+                '#type'  => 'hidden',
+                '#value' => $value,
+            );
+        }
+    }
+    $form['actions']           = array('#type' => 'actions');
+    $form['actions']['submit'] = array(
+        '#type'  => 'submit',
+        '#value' => t('Submit order'),
+    );
+    $form['cms_name']          = array(
+        '#type'  => 'hidden',
+        '#value' => "drupal-commerce",
+    );
+
+
+    return $form;
+}
+
+/**
+ * Payment method callback: redirect form return validation.
+ */
+function yoo_commerce_api_redirect_form_validate($order, $payment_method)
+{
+    return true;
+}
+
+/**
+ * Implements hook_yoomoney_api_shop_params_alter().
+ *
+ * @param $params
+ */
+function yoo_commerce_api_yoomoney_api_shop_params_alter(&$params)
+{
+    $order = commerce_order_load($params['order_id']);
+
+    if ($order) {
+        // Selected payment method
+        if (isset($order->data['yoo_commerce_api'])) {
+            $params['paymentType'] = $order->data['yoo_commerce_api']['payment_method'];
+        }
+
+        // Return to the payment redirect page for processing successful payments
+        $params['shopSuccessURL'] = yoo_commerce_api_get_checkout_url($order, true);
+
+        // Return to the previous page when payment is canceled
+        $params['shopFailURL'] = yoo_commerce_api_get_checkout_url($order, false);
+    }
+}
+
+/**
+ * Implements hook_yoomoney_quick_params_alter().
+ *
+ * @param $params
+ */
+function yoo_commerce_api_yoomoney_api_quick_params_alter(&$params)
+{
+    $order = commerce_order_load($params['order_id']);
+
+    // Selected payment method
+    $params['paymentType'] = $order->data['yoo_commerce_api']['payment_method'];
+}
+
+/**
+ * Process successful payment to update Commerce entities.
+ * Implements hook_yoomoney_api_process_payment_alter().
+ *
+ * @param array $payment
+ */
+function yoo_commerce_api_yoomoney_api_process_payment_alter(&$payment)
+{
+    /** @var YooMoneyApiTransaction $transaction */
+    $transaction = $payment['transaction'];
+    $order       = commerce_order_load($transaction->order_id);
+
+    if ($order) {
+        $paymentId = $transaction->ymid;
+        yoomoney_api_update_transaction_payment_id($transaction->ymid, $paymentId);
+        $transaction->status = yoomoney_api_update_transaction_status($transaction->ymid, YooMoneyApiTransaction::STATUS_COMPLETED);
+        yoo_commerce_create_commerce_transaction(
+            $transaction,
+            COMMERCE_PAYMENT_STATUS_SUCCESS,
+            '',
+            array(),
+            $payment['request']
+        );
+        commerce_order_status_update($order, YooMoneyApiTransaction::STATUS_COMPLETED);
+
+        $payment['success'] = true;
+    } else {
+        $payment['success'] = false;
+        $payment['error']   = t('Can not find order with id ').$transaction->order_id;
+    }
+}
+
+/**
+ * @param stdClass $order
+ * @param bool $success
+ *
+ * @return string
+ */
+function yoo_commerce_api_get_checkout_url($order, $success = true)
+{
+    return url(
+        'checkout/'.$order->order_id.'/payment/'.($success ? 'return' : 'back').'/'.$order->data['payment_redirect_key'],
+        array('absolute' => true)
+    );
+}
+
+/**
+ * @param YooMoneyApiTransaction $transaction
+ * @param string $status
+ * @param string $message
+ * @param array $message_params
+ * @param null $request
+ *
+ * @return bool
+ */
+function yoo_commerce_create_commerce_transaction(
+    YooMoneyApiTransaction $transaction,
+    $status,
+    $message = '',
+    $message_params = array(),
+    $request = null
+) {
+    $order = commerce_order_load($transaction->order_id);
+
+    $order_wrapper              = entity_metadata_wrapper('commerce_order', $order);
+    $currency_code              = $order_wrapper->commerce_order_total->currency_code->value();
+    $payment_method_instance_id = 'yoo_commerce|commerce_payment_yoo_commerce';
+
+    // Prepare a transaction object to log the API response.
+    $commerce_transaction                    = commerce_payment_transaction_new($payment_method_instance_id, $order->order_id);
+    $commerce_transaction->instance_id       = $payment_method_instance_id;
+    $commerce_transaction->uid               = $transaction->uid;
+    $commerce_transaction->remote_id         = $transaction->ymid;
+    $commerce_transaction->message           = $message;
+    $commerce_transaction->message_variables = $message_params;
+    $commerce_transaction->amount            = $transaction->amount * 100;
+    $commerce_transaction->currency_code     = $currency_code;
+    $commerce_transaction->status            = $status;
+    $commerce_transaction->remote_status     = $transaction->status;
+
+    if ($request) {
+        $commerce_transaction->payload[REQUEST_TIME] = $request;
+    }
+
+    // Save the transaction information.
+    return !!commerce_payment_transaction_save($commerce_transaction);
+}
+
+function yoo_commerce_api_get_return_url($order)
+{
+    return url(
+        'yoomoney_api/commerce/return',
+        array(
+            'absolute' => true,
+            'query'    => array('orderId' => $order->order_id),
+        )
+    );
+}
+
+
+/**
+ * Implements hook_yoomoney_api_complete();
+ */
+function yoo_commerce_yoomoney_api_complete()
+{
+    if (isset($_GET['shopSuccessURL'])) {
+        drupal_goto($_GET['shopSuccessURL']);
+    }
+}
+
+/**
+ * Implements hook_yoomoney_api_fail();
+ */
+function yoo_commerce_api_yoomoney_api_fail()
+{
+    if (isset($_GET['shopFailURL'])) {
+        drupal_goto($_GET['shopFailURL']);
+    }
+}
+
+function yoo_commerce_api_theme()
+{
+    $items                                = array();
+    $items['form_radio_element']          = array('render element' => 'element');
+    $items['form_radios_element']         = array('render element' => 'element');
+    $items['form_radio_element_external'] = array('render element' => 'element');
+
+    return $items;
+}
+
+function yoo_commerce_api_theme_registry_alter(&$theme_registry)
+{
+    $theme_registry['form_radios_element']['function']         = "theme_yoo_commerce_api_form_radios_element";
+    $theme_registry['form_radio_element']['function']          = "theme_yoo_commerce_api_form_radio_element";
+    $theme_registry['form_radio_element_external']['function'] = "theme_yoo_commerce_api_form_radio_element_external";
+}
+
+function theme_yoo_commerce_api_form_radios_element($variables)
+{
+    $element = $variables['element'];
+
+    if ($element['#value'] == \YooKassa\Model\PaymentMethodType::ALFABANK) {
+        $element['alfabank']['#theme'] = 'form_radio_element_external';
+    } else if ($element['#value'] == \YooKassa\Model\PaymentMethodType::QIWI) {
+        $element['qiwi']['#theme'] = 'form_radio_element_external';
+    }
+
+    foreach (element_children($element) as $key) {
+
+        if ($element[$key]['#theme'] !== 'form_radio_element_external') {
+            $element[$key]['#theme'] = 'form_radio_element';
+        }
+        $element[$key]['#method_name'] = $element[$key]['#title'];
+        $element[$key]['#title']       = '';
+    }
+    $items = drupal_render_children($element);
+
+    return '<div '.drupal_attributes($element['#attributes']).'>'.$items.'</div>';
+}
+
+function theme_yoo_commerce_api_form_radio_element($variables)
+{
+    $element                        = $variables['element'];
+    $element['#attributes']['type'] = 'radio';
+    element_set_attributes(
+        $element,
+        array(
+            'id',
+            'name',
+            '#return_value' => 'value',
+        )
+    );
+    if (isset($element['#return_value']) && $element['#value'] !== false && $element['#value'] == $element['#return_value']) {
+        $element['#attributes']['checked'] = 'checked';
+    }
+    _form_set_class($element, array('form-radio'));
+    $output = '<input'.drupal_attributes($element['#attributes']).' />';
+    $output .= '<label for="'.$element['#id'].'" class="option">'.$element['#method_name'].'</label>';
+
+    return '<div class="form-item form-type-radio">'.$output.'</div>';
+}
+
+function theme_yoo_commerce_api_form_radio_element_external($variables)
+{
+    $element                        = $variables['element'];
+    $element['#attributes']['type'] = 'radio';
+    element_set_attributes(
+        $element,
+        array(
+            'id',
+            'name',
+            '#return_value' => 'value',
+        )
+    );
+    if (isset($element['#return_value']) && $element['#value'] !== false && $element['#value'] == $element['#return_value']) {
+        $element['#attributes']['checked'] = 'checked';
+    }
+    _form_set_class($element, array('form-radio'));
+    $output = '<input'.drupal_attributes($element['#attributes']).' />';
+    $output .= '<label for="'.$element['#id'].'" class="option">'.$element['#method_name'].'</label>';
+
+    if ($element['#value'] == 'alfabank') {
+        $output .= '<div>';
+        $output .= '<div>'.t('Specify the login, and we\'ll send the bill in Alfa-Click. All you have do after that is confirm the payment online at the bank\'s website.').'</div>';
+        $output .= '<input type="text" name="alfabank_login">';
+        $output .= '</div>';
+    } elseif ($element['#value'] == 'qiwi') {
+        $output .= '<div>';
+        $output .= '<div>'.t('Phone number linked to Qiwi Wallet').'</div>';
+        $output .= '<input type="text" name="qiwi_phone">';
+        $output .= '</div>';
+    }
+
+    return '<div class="form-item form-type-radio">'.$output.'</div>';
+}
+
+function yoo_commerce_ajax_payment_method_form_callback(&$form, &$form_state)
+{
+    $form_state['rebuild'] = true;
+    if ($form_state['values']['commerce_payment']['payment_details']['payment_method'] == 'qiwi') {
+        $form['commerce_payment']['payment_details']['payment_method']['qiwi']['#theme'] = 'form_radio_element_external';
+    } else if ($form_state['values']['commerce_payment']['payment_details']['payment_method'] == 'alfabank') {
+        $form['commerce_payment']['payment_details']['payment_method']['alfabank']['#theme'] = 'form_radio_element_external';
+    }
+
+    return $form['commerce_payment']['payment_details']['payment_method'];
+}
+
+
+/**
+ * @param $orderInfo
+ *
+ * @return bool|string
+ */
+function yoo_commerce_api_create_description($orderInfo)
+{
+    $descriptionTemplate = variable_get('yoomoney_api_description_template', t('Payment for order No. %order_number%'));
+
+    $replace = array();
+    foreach ($orderInfo as $key => $value) {
+        if (is_scalar($value)) {
+            $replace['%'.$key.'%'] = $value;
+        }
+    }
+
+    $description = strtr($descriptionTemplate, $replace);
+
+    return (string)mb_substr($description, 0, Payment::MAX_LENGTH_DESCRIPTION);
+}
+
+/**
+ * @param $paymentId
+ *
+ * @return mixed|null
+ */
+function yooCommerceApiPaymentTransactioLoad($paymentId)
+{
+    $transactions = commerce_payment_transaction_load_multiple(
+        array(),
+        array('remote_id' => $paymentId)
+    );
+
+    return !empty($transactions) ? array_shift($transactions) : null;
+}
+
+/**
+ * @param \YooKassa\Model\PaymentInterface $payment
+ * @param $order
+ */
+function yoo_commerce_api_capture_payment($payment, $order)
+{
+    $apiClient = yoomoney_api__common__get_api_client();
+    $response  = null;
+    try {
+        $builder = CreateCaptureRequest::builder();
+
+        $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
+        $currency_code = $order_wrapper->commerce_order_total->currency_code->value();
+        $amount        = $order_wrapper->commerce_order_total->amount->value();
+        $amount        = round(commerce_currency_amount_to_decimal($amount, $currency_code), 2);
+
+        $builder->setAmount($amount);
+        yoo_commerce_api_set_receipt_if_needed($builder, $order, $order_wrapper);
+
+        $request  = $builder->build();
+
+        if ($request->getReceipt() !== null) {
+            $request->getReceipt()->normalize($request->getAmount());
+        }
+
+        $response = $apiClient->capturePayment($request, $payment->getId());
+    } catch (\Exception $e) {
+        $this->module->log('error', 'Capture error: '.$e->getMessage());
+        $response = $payment;
+    }
+    yoomoney_api_common_check_value_is_not_empty($response, '400 Bad Request', 'Empty payment info');
+    if ($response->getStatus() !== \YooKassa\Model\PaymentStatus::SUCCEEDED) {
+        $this->module->log('error', 'Capture payment error: capture failed');
+
+        return;
+    }
+
+    yoomoney_api_update_transaction_status($response->getId(), $response->getStatus());
+
+    $transaction = yooCommerceApiPaymentTransactioLoad($response->getId());
+    if ($transaction) {
+        $transaction->message = t('Вы подтвердили платёж в ЮKassa.');
+        commerce_payment_transaction_save($transaction);
+    }
+
+    echo "OK";
+    exit();
+}
+
+/**
+ * @param string $paymentId
+ * @param $order
+ */
+function yoo_commerce_api_cancel_payment($paymentId, $order)
+{
+    $apiClient = yoomoney_api__common__get_api_client();
+    $response  = $apiClient->cancelPayment($paymentId);
+    if (!$response || $response->getStatus() !== PaymentStatus::CANCELED) {
+        $this->module->log('error', 'Cancel payment error: cancel failed');
+
+        return;
+    }
+
+    commerce_order_status_update($order, YOOMONEY_API_ORDER_STATUS_CANCELED);
+    yoomoney_api_update_transaction_status($paymentId, PaymentStatus::CANCELED);
+
+    $transaction = yooCommerceApiPaymentTransactioLoad($paymentId);
+    if ($transaction) {
+        $transaction->status        = COMMERCE_PAYMENT_STATUS_FAILURE;
+        $transaction->remote_status = $response->getStatus();
+        $transaction->message       = t('Вы отменили платёж в ЮKassa. Деньги вернутся клиенту.');
+        commerce_payment_transaction_save($transaction);
+    }
+
+    echo "OK";
+    exit();
+}

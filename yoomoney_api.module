@@ -1,0 +1,938 @@
+<?php
+use YooKassa\Client;
+use YooKassa\Model\Notification\NotificationSucceeded;
+use YooKassa\Model\Notification\NotificationWaitingForCapture;
+use YooKassa\Model\NotificationEventType;
+use YooKassa\Model\PaymentMethodType;
+use YooKassa\Model\PaymentStatus;
+use YooKassa\Request\Payments\Payment\CreateCaptureRequest;
+
+$modulePath = drupal_get_path('module', 'yoomoney_api');
+require_once $modulePath.DIRECTORY_SEPARATOR.'YooMoneyLogger.php';
+require_once $modulePath.DIRECTORY_SEPARATOR.'vendor'.DIRECTORY_SEPARATOR.'autoload.php';
+require_once $modulePath.DIRECTORY_SEPARATOR.'YooMoneySecondReceiptModel.php';
+
+define('YOOMONEY_API_CHECK_RESULT_CODE_SUCCESS', 0);
+define('YOOMONEY_API_CHECK_RESULT_CODE_ERROR_MD5', 1);
+define('YOOMONEY_API_CHECK_RESULT_CODE_ERROR_CUSTOM', 100);
+define('YOOMONEY_API_CHECK_RESULT_CODE_ERROR_REQUEST', 200);
+define('YOOMONEY_API_DEFAULT_TAX_RATE_ID', 1);
+define('YOOMONEY_MODULE_VERSION', '2.0.0');
+define('YOOMONEY_API_DEFAULT_PAYMENT_METHOD', \YooKassa\Model\PaymentMethodType::BANK_CARD);
+define('YOOMONEY_API_QUICK_API_PAY_VERSION', 2);
+define('YOOMONEY_API_INSTALLMENTS_MIN_AMOUNT', 3000);
+
+define('YOOMONEY_API_ORDER_STATUS_PENDING', 'pending');
+define('YOOMONEY_API_ORDER_STATUS_PROCESSING', 'processing');
+define('YOOMONEY_API_ORDER_STATUS_CANCELED', 'canceled');
+define('YOOMONEY_API_ORDER_STATUS_COMPLETED', 'completed');
+
+/**
+ * Implements hook_init().
+ */
+function yoomoney_api_init()
+{
+    module_load_include('inc', 'yoomoney_api', 'transactions');
+}
+
+/**
+ * Implements hook_permission().
+ */
+function yoomoney_api_permission()
+{
+    return array(
+        'access yoomoney_api_ money transaction'     => array(
+            'title'       => t('Access YooMoney transaction'),
+            'description' => t('Display the YooMoney transaction.'),
+        ),
+        'access own yoomoney_api_ money transaction' => array(
+            'title'       => t('Access own YooMoney transaction'),
+            'description' => t('Display the YooMoney transaction by own user.'),
+        ),
+        'access yoomoney_api settings'               => array(
+            'title'       => t('Access YooMoney API'),
+            'description' => t('Access to YooMoney API variables.'),
+        ),
+    );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function yoomoney_api_menu()
+{
+    $items = array();
+
+    // Secret transaction status url
+    $items['yoomoney_api/check_wallet'] = array(
+        'page callback'   => 'yoomoney_api_check_wallet',
+        'access callback' => 'yoomoney_api_check_server_ip',
+        'type'            => MENU_CALLBACK,
+    );
+    // Config page
+    $items['admin/config/system/yoomoney_api'] = array(
+        'title'            => t('YooMoney Core'),
+        'description'      => t('YooMoney base settings page.'),
+        'page callback'    => 'drupal_get_form',
+        'page arguments'   => array('yoomoney_api_admin_settings'),
+        'access arguments' => array('access yoomoney_api settings'),
+        'type'             => MENU_NORMAL_ITEM,
+        'file'             => 'yoomoney_api.admin.inc',
+    );
+
+    // Transactions page menu
+    $items['admin/reports/yoomoney_api_transactions'] = array(
+        'title'            => t('YooMoney transactions '),
+        'description'      => t('YooMoney all transactions page.'),
+        'page callback'    => 'yoomoney_api_transactions_page',
+        'access arguments' => array('access yoomoney_api_ money transaction'),
+        'type'             => MENU_NORMAL_ITEM,
+        'file'             => 'transactions.inc',
+    );
+
+    // yoomoney_api actions
+    $items['admin/yoomoney_api/actions'] = array(
+        'page callback'    => 'yoomoney_api_actions',
+        'access arguments' => array('access yoomoney_api_ money transaction'),
+        'type'             => MENU_CALLBACK,
+    );
+
+    // Account transaction table
+    $items['user/%user/yoomoney_api_payments'] = array(
+        'title'            => t('My transactions'),
+        'description'      => t('YooMoney user transactions page.'),
+        'page callback'    => 'yoomoney_api_transactions_user_page',
+        'page arguments'   => array(1),
+        'access arguments' => array('access own yoomoney_api_ money transaction'),
+        'type'             => MENU_LOCAL_TASK,
+        'file'             => 'transactions.inc',
+    );
+
+    // Payment callbacks
+    $items['yoomoney_api/commerce/return'] = array(
+        'page callback'   => 'yoomoney_api_commerce_return_page',
+        'access callback' => true,
+        'type'            => MENU_CALLBACK,
+    );
+    // Payment callbacks
+    $items['yoomoney_api/ubercart/return'] = array(
+        'page callback'   => 'yoomoney_api_ubercart_return_page',
+        'access callback' => true,
+        'type'            => MENU_CALLBACK,
+    );
+
+    $items['yoomoney_api/ubercart/notify'] = array(
+        'page callback'   => 'yoomoney_api_ubercart_notify',
+        'access callback' => true,
+        'type'            => MENU_CALLBACK,
+    );
+
+    $items['yoomoney_api/commerce/notify'] = array(
+        'page callback'   => 'yoomoney_api_commerce_notify',
+        'access callback' => true,
+        'type'            => MENU_CALLBACK,
+    );
+
+    $items['yoomoney_api/success'] = array(
+        'page callback'   => 'yoomoney_api_complete_page',
+        'access callback' => true,
+        'type'            => MENU_CALLBACK,
+    );
+    $items['yoomoney_api/fail']    = array(
+        'page callback'   => 'yoomoney_api_fail_page',
+        'access callback' => true,
+        'type'            => MENU_CALLBACK,
+    );
+    $items['yoomoney_api/temp']    = array(
+        'page callback'   => 'yoomoney_api_temp_page',
+        'access callback' => true,
+        'type'            => MENU_CALLBACK,
+    );
+
+    return $items;
+}
+
+/**
+ * @return Client
+ */
+function yoomoney_api__common__get_api_client()
+{
+    $shopId       = variable_get('yoomoney_api_shop_id');
+    $shopPassword = variable_get('yoomoney_api_secret');
+    $apiClient    = new Client();
+    $apiClient->setAuth($shopId, $shopPassword);
+    $apiClient->setLogger(new YooMoneyLogger());
+    $userAgent = $apiClient->getApiClient()->getUserAgent();
+    $userAgent->setCms('Drupal', VERSION);
+    $userAgent->setModule('yoomoney-cms-drupal7', YOOMONEY_MODULE_VERSION);
+
+    return $apiClient;
+}
+
+function yoomoney_api_ubercart_return_page()
+{
+    YooMoneyLogger::info('Return url init ubercart');
+    $failUrl    = 'yoomoney_api/fail';
+    $successUrl = 'yoomoney_api/success';
+
+    $params = drupal_get_query_parameters();
+    if (!isset($params['orderId'])) {
+        YooMoneyLogger::info('Payment failed. Empty params orderId');
+        drupal_goto($failUrl);
+    }
+
+    $order = uc_order_load($params['orderId']);
+    if (!$order) {
+        YooMoneyLogger::info('Payment failed. Can not load oder id #'.$params['orderId']);
+        drupal_goto($failUrl);
+    }
+    YooMoneyLogger::info('Order: '.json_encode($order));
+
+    $transaction = yoomoney_api_transaction_load_by_order($order->order_id);
+    if (!$transaction) {
+        YooMoneyLogger::info('Payment failed. Transaction not found for order id #'.$params['orderId']);
+        drupal_goto($failUrl);
+    }
+    YooMoneyLogger::info('Transaction: '.json_encode($transaction));
+
+    $apiClient = yoomoney_api__common__get_api_client();
+
+    $paymentId = $transaction->payment_id;
+
+    try {
+        $payment = $apiClient->getPaymentInfo($paymentId);
+        if (!$payment) {
+            YooMoneyLogger::info('Payment failed. Empty payment info. PaymentId #'.$paymentId);
+            drupal_goto($failUrl);
+        }
+        $transaction->status = $payment->getStatus();
+        yoomoney_api_transaction_save($transaction);
+        $url = $payment->getPaid() ? $successUrl : $failUrl;
+        drupal_goto($url);
+    } catch (Exception $e) {
+        YooMoneyLogger::info('Payment failed. Redirect: '.url($failUrl, array('absolute' => true)));
+        YooMoneyLogger::error('Error: '.$e->getMessage());
+        drupal_goto($failUrl);
+    }
+}
+
+function yoomoney_api_commerce_return_page()
+{
+    YooMoneyLogger::info('Return url init');
+    $failUrl    = 'yoomoney_api/fail';
+    $successUrl = 'yoomoney_api/success';
+
+    $params = drupal_get_query_parameters();
+    if (!isset($params['orderId'])) {
+        YooMoneyLogger::info('Payment failed. Empty params orderId');
+        drupal_goto($failUrl);
+    }
+    $order = commerce_order_load($params['orderId']);
+    if (!$order) {
+        YooMoneyLogger::info('Payment failed. Can not load oder id #'.$params['orderId']);
+        drupal_goto($failUrl);
+    }
+
+    $transaction = yoomoney_api_transaction_load_by_order($order->order_id);
+    if (!$transaction) {
+        YooMoneyLogger::info('Payment failed. Transaction not found for order id #'.$params['orderId']);
+        drupal_goto($failUrl);
+    }
+    $apiClient = yoomoney_api__common__get_api_client();
+
+    $paymentId = $transaction->payment_id;
+
+    try {
+        $payment = $apiClient->getPaymentInfo($paymentId);
+        if (!$payment) {
+            YooMoneyLogger::info('Payment failed. Empty payment info. PaymentId #'.$paymentId);
+            drupal_goto($failUrl);
+        }
+
+        $transaction->status = $payment->getStatus();
+        yoomoney_api_transaction_save($transaction);
+        $url = $payment->getPaid() ? $successUrl : $failUrl;
+        drupal_goto($url);
+    } catch (Exception $e) {
+        YooMoneyLogger::info('Payment failed. Redirect: '.url($failUrl, array('absolute' => true)));
+        YooMoneyLogger::error('Api error: '.$e->getMessage());
+        drupal_goto($failUrl);
+    }
+}
+
+function yoomoney_api_ubercart_notify()
+{
+    YooMoneyLogger::info('Return notification init ubercart');
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        exit();
+    }
+    $notification = yoomoney_api_common_get_payment_info_from_input();
+    $paymentId    = $notification->getObject()->getId();
+
+    $apiClient = yoomoney_api__common__get_api_client();
+
+    $transaction = yoomoney_api_transaction_load_by_payment($paymentId);
+    yoomoney_api_common_check_value_is_not_empty($transaction, '404 Not Found', 'Transaction not found');
+    $orderResult = uc_order_load($transaction->order_id);
+    if ($orderResult && is_array($orderResult)) {
+        $order = $orderResult[0];
+    } else {
+        $order = $orderResult;
+    }
+    yoomoney_api_common_check_value_is_not_empty($order, '404 Not Found', 'Order not found');
+    if ($order->order_status === YOOMONEY_API_ORDER_STATUS_COMPLETED) {
+        yoomoney_api_common_exit_200();
+    }
+
+    $payment = $apiClient->getPaymentInfo($paymentId);
+    yoomoney_api_common_check_value_is_not_empty($payment, '400 Bad Request', 'Empty payment info');
+
+    if ($notification->getEvent() === NotificationEventType::PAYMENT_WAITING_FOR_CAPTURE
+        && $payment->getStatus() === PaymentStatus::WAITING_FOR_CAPTURE
+    ) {
+        if (yoomoney_api__common__is_enable_hold_mode()
+            && $payment->getPaymentMethod()->getType() === PaymentMethodType::BANK_CARD
+        ) {
+            YooMoneyLogger::info('Hold payment for order: '.$order->order_id);
+            uc_order_update_status($order->order_id, YOOMONEY_API_ORDER_STATUS_PROCESSING);
+            uc_order_comment_save($order->order_id, 0,
+                sprintf(t('Поступил новый платёж. Он ожидает подтверждения до %1$s, после чего автоматически отменится'),
+                    $payment->getExpiresAt()->format('d.m.Y H:i')));
+        } else {
+            $captureRequest = CreateCaptureRequest::builder()->setAmount($payment->getAmount())->build();
+            $payment        = $apiClient->capturePayment($captureRequest, $payment->getId());
+            yoomoney_api_common_check_value_is_not_empty($payment, '400 Bad Request', 'Empty payment info');
+        }
+        yoomoney_api_update_transaction_status($paymentId, $payment->getStatus());
+        yoomoney_api_common_exit_200();
+    }
+
+    if ($notification->getEvent() === NotificationEventType::PAYMENT_SUCCEEDED
+        && $payment->getStatus() === PaymentStatus::SUCCEEDED
+    ) {
+        YooMoneyLogger::info('Order status completed');
+        uc_order_update_status($order->order_id, YOOMONEY_API_ORDER_STATUS_COMPLETED);
+        yoomoney_api_update_transaction_status($paymentId, $payment->getStatus());
+        yoomoney_api_update_transaction_amount($paymentId, $payment->getAmount()->getValue());
+        yoomoney_api_common_exit_200();
+    }
+    YooMoneyLogger::error('Wrong payment status: '.$payment->getStatus());
+    yoomoney_api_common_exit_400();
+}
+
+function yoomoney_api_commerce_notify()
+{
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        exit();
+    }
+
+    $notification = yoomoney_api_common_get_payment_info_from_input();
+    $paymentId    = $notification->getObject()->getId();
+    $transaction  = yooCommerceApiPaymentTransactioLoad($paymentId);
+    $order        = commerce_order_load($transaction->order_id);
+    yoomoney_api_common_check_value_is_not_empty($order, '404 Not Found', 'Order not found');
+
+    $apiClient = yoomoney_api__common__get_api_client();
+
+    if ($order->status === YOOMONEY_API_ORDER_STATUS_COMPLETED) {
+        yoomoney_api_common_exit_200();
+    }
+    $payment = $apiClient->getPaymentInfo($paymentId);
+    yoomoney_api_common_check_value_is_not_empty($payment, '400 Bad Request', 'Empty payment info');
+
+    if ($notification->getEvent() === NotificationEventType::PAYMENT_WAITING_FOR_CAPTURE
+        && $payment->getStatus() === PaymentStatus::WAITING_FOR_CAPTURE
+    ) {
+        if (yoomoney_api__common__is_enable_hold_mode()
+            && $payment->getPaymentMethod()->getType() === PaymentMethodType::BANK_CARD
+        ) {
+            YooMoneyLogger::info('Hold payment for order: '.$order->order_number);
+            commerce_order_status_update($order, YOOMONEY_API_ORDER_STATUS_PROCESSING);
+            $transaction->remote_status = $payment->getStatus();
+            $transaction->message       = sprintf(t('Поступил новый платёж. Он ожидает подтверждения до %1$s, после чего автоматически отменится'),
+                $payment->getExpiresAt()->format('d.m.Y H:i'));
+            commerce_payment_transaction_save($transaction);
+        } else {
+            $captureRequest = CreateCaptureRequest::builder()->setAmount($payment->getAmount())->build();
+            $payment        = $apiClient->capturePayment($captureRequest, $payment->getId());
+            yoomoney_api_common_check_value_is_not_empty($payment, '400 Bad Request', 'Empty payment info');
+        }
+        yoomoney_api_update_transaction_status($paymentId, $payment->getStatus());
+        yoomoney_api_common_exit_200();
+    }
+
+    if ($notification->getEvent() === NotificationEventType::PAYMENT_SUCCEEDED
+        && $payment->getStatus() === PaymentStatus::SUCCEEDED
+    ) {
+        YooMoneyLogger::info('Order status completed');
+        commerce_order_status_update($order, YOOMONEY_API_ORDER_STATUS_COMPLETED);
+        $transaction->status        = COMMERCE_PAYMENT_STATUS_SUCCESS;
+        $transaction->remote_status = $payment->getStatus();
+        commerce_payment_transaction_save($transaction);
+        yoomoney_api_update_transaction_status($paymentId, $payment->getStatus());
+        yoomoney_api_update_transaction_amount($paymentId, $payment->getAmount()->getValue());
+        yoomoney_api_common_exit_200();
+    }
+
+    YooMoneyLogger::error('Wrong payment status: '.$payment->getStatus());
+    yoomoney_api_common_exit_400();
+}
+
+/**
+ * @return NotificationWaitingForCapture|NotificationSucceeded
+ */
+function yoomoney_api_common_get_payment_info_from_input()
+{
+    $body = @file_get_contents('php://input');
+    YooMoneyLogger::info('Notification: '.$body);
+    $callbackParams = json_decode($body, true);
+    yoomoney_api_common_check_json_last_error();
+
+    try {
+        $notification = ($callbackParams['event'] === NotificationEventType::PAYMENT_SUCCEEDED)
+            ? new NotificationSucceeded($callbackParams)
+            : new NotificationWaitingForCapture($callbackParams);
+    } catch (\Exception $e) {
+        YooMoneyLogger::error('Invalid notification object - '.$e->getMessage());
+        header('HTTP/1.1 400 Invalid object in body');
+        exit();
+    }
+
+    $payment = $notification->getObject();
+    yoomoney_api_common_check_value_is_not_empty($payment->id, '400 Bad Request', 'Empty payment response id');
+
+    return $notification;
+}
+
+function yoomoney_api_actions()
+{
+    $action    = filter_input(INPUT_POST, 'action', FILTER_SANITIZE_STRING);
+    $paymentId = filter_input(INPUT_POST, 'paymentId', FILTER_SANITIZE_STRING);
+    $module    = filter_input(INPUT_POST, 'module', FILTER_SANITIZE_STRING);
+
+    $transaction = yoomoney_api_transaction_load_by_payment($paymentId);
+    yoomoney_api_common_check_value_is_not_empty($transaction, '404 Not Found', 'Transaction not found');
+
+    $apiClient = yoomoney_api__common__get_api_client();
+
+    $payment = $apiClient->getPaymentInfo($paymentId);
+    yoomoney_api_common_check_value_is_not_empty($payment, '400 Bad Request', 'Empty payment info');
+
+    $rightStatus = $payment->getStatus() === PaymentStatus::WAITING_FOR_CAPTURE;
+    yoomoney_api_common_check_value_is_not_empty($rightStatus, '400 Bad Request',
+        'Capture payment error: wrong payment status: '.$payment->getStatus());
+
+    if ($module === 'uc_payment') {
+        $orderResult = uc_order_load($transaction->order_id);
+        if ($orderResult && is_array($orderResult)) {
+            $order = $orderResult[0];
+        } else {
+            $order = $orderResult;
+        }
+        yoomoney_api_common_check_value_is_not_empty($order, '404 Not Found', 'Order not found');
+        switch ($action) {
+            case 'capturePayment':
+                yoo_ubercart_api_capture_payment($payment, $order);
+                break;
+            case 'cancelPayment':
+                yoo_ubercart_api_cancel_payment($paymentId, $order);
+                break;
+        }
+    } elseif ($module === 'commerce') {
+        $order = commerce_order_load($transaction->order_id);
+        yoomoney_api_common_check_value_is_not_empty($order, '404 Not Found', 'Order not found');
+        switch ($action) {
+            case 'capturePayment':
+                yoo_commerce_api_capture_payment($payment, $order);
+                break;
+            case 'cancelPayment':
+                yoo_commerce_api_cancel_payment($paymentId, $order);
+                break;
+        }
+    }
+
+    YooMoneyLogger::error('Capture payment error: module or order not found');
+}
+
+function yoomoney_api_common_check_json_last_error()
+{
+    if (json_last_error()) {
+        YooMoneyLogger::info('Parse POST body failed');
+        header('HTTP/1.1 400 Bad Request');
+        header('Status: 400 Bad Request');
+        exit();
+    }
+}
+
+/**
+ * @param mixed $value
+ * @param string $status
+ * @param string $logMessage
+ */
+function yoomoney_api_common_check_value_is_not_empty($value, $status, $logMessage)
+{
+    if (!$value) {
+        YooMoneyLogger::error($logMessage);
+        header('HTTP/1.1 '.$status);
+        header('Status: '.$status);
+        exit();
+    }
+}
+
+function yoomoney_api_common_exit_200()
+{
+    header('HTTP/1.1 200 OK');
+    header('Status: 200 OK');
+    exit();
+}
+
+function yoomoney_api_common_exit_400()
+{
+    header('HTTP/1.1 400 Bad Request');
+    header('Status: 400 Bad Request');
+    exit();
+}
+
+/**
+ * Returns text message for success transaction
+ * @return mixed
+ */
+function yoomoney_api_complete_page()
+{
+    drupal_set_title(t('Congratulations!'));
+    module_invoke_all('yoomoney_api_complete');
+    $success = variable_get('yoomoney_api_success_text', array('value' => ''));
+    $page    = array(
+        '#markup' => $success['value'],
+    );
+    drupal_alter('yoomoney_api_complete_page', $page);
+
+    return $page;
+}
+
+/**
+ * Returns text message for failed transaction.
+ * @return mixed
+ */
+function yoomoney_api_fail_page()
+{
+    drupal_set_title(t('Sorry!'));
+    module_invoke_all('yoomoney_api_fail');
+    $fail = variable_get('yoomoney_api_fail_text', array('value' => ''));
+    $page = array(
+        '#markup' => $fail['value'],
+    );
+    drupal_alter('yoomoney_api_fail_page', $page);
+
+    return $page;
+}
+
+/**
+ * One callback to handle both Success and Fail pages.
+ */
+function yoomoney_api_temp_page()
+{
+    if (isset($_GET['action']) && $_GET['action'] === 'PaymentSuccess') {
+        drupal_goto('yoomoney_api/complete', array('query' => $_GET));
+    } else {
+        drupal_goto('yoomoney_api/fail', array('query' => $_GET));
+    }
+}
+
+/**
+ * Check YooMoney IP
+ * @return bool
+ */
+function yoomoney_api_check_server_ip()
+{
+    $ip          = ip_address();
+    $allowed_ips = variable_get('yoomoney_api_ip', '0.0.0.0');
+    $allowed_ips = explode("\n", $allowed_ips);
+    foreach ($allowed_ips as $allowed_ip) {
+        $allowed_ip = trim($allowed_ip);
+        if (empty($allowed_ip)) {
+            continue;
+        }
+        if ($allowed_ip === '0.0.0.0' || $ip === $allowed_ip) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * @param array $params
+ *
+ * @return string
+ */
+function yoomoney_api_create_md5($params = array())
+{
+    if (!empty($params)) {
+        $output = '';
+        $output .= $params['action'];
+        $output .= ';'.$params['orderSumAmount'];
+        $output .= ';'.$params['orderSumCurrencyPaycash'];
+        $output .= ';'.$params['orderSumBankPaycash'];
+        $output .= ';'.$params['shopId'];
+        $output .= ';'.$params['invoiceId'];
+        $output .= ';'.$params['customerNumber'];
+        $md5    = md5($output.';'.variable_get('yoomoney_api_secret', ''));
+
+        return drupal_strtoupper($md5);
+    } else {
+        return '';
+    }
+}
+
+/**
+ * Handle "check payment" requests from YooMoney
+ */
+function yoomoney_api_check_wallet()
+{
+
+    if (!isset($_POST['label'])) {
+        http_response_code(404);
+
+        return;
+    }
+
+    $secretWord = variable_get('yoomoney_secret', '');
+
+    $string =       $_POST['notification_type']
+        . '&' . $_POST['operation_id']
+        . '&' . $_POST['amount']
+        . '&' . $_POST['currency']
+        . '&' . $_POST['datetime']
+        . '&' . $_POST['sender']
+        . '&' . $_POST['codepro']
+        . '&' . $secretWord
+        . '&' . $_POST['label'];
+
+    if(sha1($string) !== $_POST['sha1_hash']){
+        http_response_code (401);
+        return;
+    }
+
+    $transaction = yoomoney_api_transaction_load($_POST['label']);
+
+    if (!$transaction) {
+        http_response_code(404);
+
+        return;
+    }
+
+    if (floatval($_POST['withdraw_amount']) < floatval($transaction->amount)) {
+        http_response_code(403);
+
+        return;
+    }
+
+    if ($transaction->status !== YooMoneyApiTransaction::STATUS_PROCESSED
+        && $transaction->status !== YooMoneyApiTransaction::STATUS_PAYED
+        && $transaction->status !== YooMoneyApiTransaction::STATUS_IN_PROCESS) {
+        http_response_code(401);
+
+        return;
+    }
+
+    $payment = array(
+        'success'     => true,
+        'transaction' => $transaction,
+        'request'     => $_POST,
+    );
+
+    drupal_alter('yoomoney_api_process_payment', $payment);
+}
+
+/**
+ * @param string $type
+ * @param int $code
+ * @param string $message
+ */
+function yoomoney_api_check_send_result($type, $code = 0, $message = '')
+{
+    if (count($_POST) == 0) {
+        return;
+    }
+    $attributes = array(
+        'performedDatetime' => $_POST['requestDatetime'],
+        'code'              => $code,
+        'invoiceId'         => $_POST['invoiceId'],
+        'shopId'            => $_POST['shopId'],
+    );
+
+    if ($message) {
+        $attributes['message'] = $message;
+    }
+
+    header('Content-Type: application/xml');
+    echo '<?xml version="1.0" encoding="UTF-8"?>';
+    echo '<'.$type.' '.drupal_attributes($attributes).' />';
+
+    drupal_exit();
+}
+
+/**
+ * @return array
+ */
+function yoomoney_api_get_payment_methods()
+{
+    return array(
+        \YooKassa\Model\PaymentMethodType::YOO_MONEY    => t('Payment from a YooMoney e-wallet'),
+        \YooKassa\Model\PaymentMethodType::BANK_CARD    => t('Payment by any bank card'),
+        \YooKassa\Model\PaymentMethodType::CASH         => t('Payment in cash via retailers and payment kiosks'),
+        \YooKassa\Model\PaymentMethodType::WEBMONEY     => t('Payment from a WebMoney e-wallet'),
+        \YooKassa\Model\PaymentMethodType::ALFABANK     => t('Payment via Alfa-Click'),
+        \YooKassa\Model\PaymentMethodType::SBERBANK     => t(
+            'Payment via Sberbank: payment by text messages or Sberbank Online'
+        ),
+        \YooKassa\Model\PaymentMethodType::QIWI         => t('Payment via QIWI Wallet'),
+        \YooKassa\Model\PaymentMethodType::TINKOFF_BANK => t('Tinkoff online banking'),
+        \YooKassa\Model\PaymentMethodType::INSTALLMENTS => t('Installments'),
+    );
+}
+
+/**
+ * @return array
+ */
+function yoomoney_api_get_enabled_payment_methods()
+{
+    $payments = array();
+
+    if (variable_get('yoomoney_api_shop', 0)) {
+        $all_payments     = yoomoney_api_get_payment_methods();
+        $enabled_payments = variable_get('yoomoney_api_payment_method', array_keys($all_payments));
+        foreach ($all_payments as $key => $label) {
+            if (isset($enabled_payments[$key]) && $enabled_payments[$key] === $key) {
+                $payments[$key] = $label;
+            }
+        }
+
+    } else if (variable_get('yoomoney_api_p2p', 0)) {
+        $payments = array(
+            'AC' => 'Банковские карты — Visa, Mastercard и Maestro, «Мир»',
+            'PC' => 'ЮMoney',
+        );
+    }
+
+    return $payments;
+}
+
+/**
+ * @param YooMoneyApiTransaction $transaction
+ *
+ * @return array
+ */
+function yoomoney_api_get_order_submission_params(YooMoneyApiTransaction $transaction)
+{
+    if (variable_get('yoomoney_api_shop', 0)) {
+        $params = yoomoney_api_get_shop_params($transaction);
+    } else if (variable_get('yoomoney_api_p2p', 0)) {
+        $params = yoomoney_api_get_quick_params($transaction);
+    }
+
+    drupal_alter('yoomoney_api_order_submission_params', $params);
+
+    return $params;
+}
+
+/**
+ * @param YooMoneyApiTransaction $transaction
+ *
+ * @return array
+ */
+function yoomoney_api_get_shop_params(YooMoneyApiTransaction $transaction)
+{
+    $params = array();
+
+    // Идентификатор Контрагента
+    $params['shopId'] = variable_get('yoomoney_api_shop_id', '');
+
+    // Идентификатор товара
+    //$params['shopArticleId'] = '';
+
+    // Сумма заказа
+    $params['sum'] = $transaction->amount;
+
+    // Идентификатор плательщика. Номер оплачиваемого мобильного телефона, договора и т. п., специфично для Контрагента.
+    $params['customerNumber'] = $transaction->uid;
+
+    // Уникальный для данного shopId номер заказа в ИС Контрагента.
+    $params['orderNumber'] = $transaction->order_id;
+
+    // URL, на который должен быть осуществлен редирект в случае успеха перевода (urlencoded значение).
+    $params['shopSuccessURL'] = url('yoomoney_api/complete', array('absolute' => true));
+
+    // URL, на который должен быть осуществлен редирект в случае ошибки (urlencoded значение).
+    $params['shopFailURL'] = url('yoomoney_api/fail', array('absolute' => true));
+
+    // Детали способа совершения платежа.
+    $params['paymentType'] = (variable_get('yoomoney_api_paymode') == 'shop') ? variable_get(
+        'yoomoney_api_default_payment_method',
+        YOOMONEY_API_DEFAULT_PAYMENT_METHOD
+    ) : '';
+
+    // Provide CMS name
+    $params['cms_name'] = 'drupal';
+
+    // Internally used field
+    $params['order_id'] = $transaction->order_id;
+
+    // Internally used field
+    $params['transaction_id'] = $transaction->ymid;
+
+    drupal_alter('yoomoney_api_shop_params', $params);
+
+    return $params;
+}
+
+/**
+ * @param YooMoneyApiTransaction $transaction
+ *
+ * @return array
+ */
+function yoomoney_api_get_quick_params(YooMoneyApiTransaction $transaction)
+{
+    $params = array();
+
+    $params['receiver']         = variable_get('yoomoney_api_receiver', '');
+    $params['formcomment']      = variable_get('yoomoney_api_formcomment', '');
+    $params['short-dest']       = t('Payments for order No').$transaction->order_id;
+    $params['writable-targets'] = false;
+    $params['comment-needed']   = false;
+    $params['label']            = $transaction->ymid;
+    $params['order_id']         = (int)$transaction->order_id;
+    $params['successUrl']       = url('yoomoney_api/complete', array('absolute' => true));
+    $params['targets']          = t('Payments for order No').$transaction->order_id;
+    $params['sum']              = $transaction->amount;
+    $params['quickpay-form']    = 'shop';
+    $params['paymentType']      = variable_get(
+        'yoomoney_api_default_payment_method',
+        YOOMONEY_API_DEFAULT_PAYMENT_METHOD
+    );
+    $params['cms_name']         = 'drupal';
+
+    drupal_alter('yoomoney_api_quick_params', $params);
+
+    return $params;
+}
+
+function yoomoney_api_get_fastPay_params(YooMoneyApiTransaction $transaction)
+{
+    $params = array();
+
+    $params['formId']          = variable_get('yoomoney_billing_id');
+    $params['sum']             = $transaction->amount;
+    $params['narrative']       = str_replace(
+        '%order_id%',
+        $transaction->order_id,
+        variable_get('yoomoney_billing_narrative')
+    );
+    $params['quickPayVersion'] = YOOMONEY_API_QUICK_API_PAY_VERSION;
+    $params['fio']             = '';
+
+    drupal_alter('yoomoney_fastPay_params', $params);
+
+    return $params;
+}
+
+/**
+ * @return string
+ */
+function yoomoney_api_get_order_submission_url()
+{
+    if (variable_get('yoomoney_api_shop')) {
+        return '/';
+    } else if (variable_get('yoomoney_api_p2p')) {
+        return 'https://yoomoney.ru/quickpay/confirm.xml';
+    }
+}
+
+
+/**
+ * @return bool
+ */
+function yoomoney_api__common__is_enable_hold_mode()
+{
+    return (bool)variable_get('yoomoney_api_enable_hold_mode', 0);
+}
+
+/**
+ * @param string $paymentMethod
+ *
+ * @return bool
+ */
+function yoomoney_api__common__get_capture_value($paymentMethod)
+{
+    if (!yoomoney_api__common__is_enable_hold_mode()) {
+        return true;
+    }
+
+    return !in_array($paymentMethod, array('', PaymentMethodType::BANK_CARD));
+}
+
+function yoomoney_api_send_second_receipt($orderInfo)
+{
+    $transaction = yoomoney_api_transaction_load_by_order($orderInfo['order_id']);
+    $result = array(
+        'is_send' => false,
+        'message' => null,
+    );
+
+    if (empty($transaction->payment_id)) {
+        YooMoneyLogger::info("Second receipt isn't need, reason: paymentId is empty");
+        return (object)$result;
+    }
+
+    try {
+        $apiClient   = yoomoney_api__common__get_api_client();
+        $paymentInfo = $apiClient->getPaymentInfo($transaction->payment_id);
+    } catch (Exception $e) {
+        YooMoneyLogger::info("Second receipt isn't need, reason: {$e->getMessage()}");
+        return (object)$result;
+    }
+
+    $secondReceiptModel = new YooMoneySecondReceiptModel($paymentInfo, $orderInfo, $apiClient);
+
+    if (!$secondReceiptModel->sendSecondReceipt()) {
+        return (object)$result;
+    }
+
+    YooMoneyLogger::info("Second receipt send. Write history change");
+
+    $sum = number_format($secondReceiptModel->getSettlementsSum(), 2, '.', ' ');
+
+    $result['is_send'] = true;
+    $result['message'] = sprintf(t('Second receipt sent. Amount %s rubles'), $sum);
+
+    return (object)$result;
+}
+
+/**
+ * @param $new_status string
+ * @return bool
+ */
+function yoomoney_api_is_need_second_receipt($new_status)
+{
+    $isSendReceipt       = variable_get('yoomoney_api_send_check', 0);
+    $isSendSecondReceipt = variable_get('yoomoney_api_send_second_receipt', 0);
+    $secondReceiptStatus = variable_get('yoomoney_api_second_receipt_status', 0);
+
+    if (!$isSendReceipt) {
+        YooMoneyLogger::error('54 fz dont activate');
+        return false;
+    } elseif (!$isSendSecondReceipt) {
+        YooMoneyLogger::error('Send second receipt dont activate');
+        return false;
+    } elseif (!$secondReceiptStatus) {
+        YooMoneyLogger::error('Not selected second receipt status');
+        return false;
+    } elseif ($secondReceiptStatus != $new_status) {
+        YooMoneyLogger::error('Incorrect order status, expected status = ' . $secondReceiptStatus
+            . ' current status = ' . $new_status);
+        return false;
+    }
+
+    return true;
+}
