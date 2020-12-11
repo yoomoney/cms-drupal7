@@ -1,7 +1,0 @@
-name = Yandex Ubercart Api
-description = "Yandex.Money module for Ubercart."
-package = Yandex.Money 2.0
-core = 7.x
-version = 1.2.1
-dependencies[] = yamoney_api
-dependencies[] = uc_payment
