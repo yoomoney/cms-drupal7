@@ -17,7 +17,7 @@ define('YOOMONEY_API_CHECK_RESULT_CODE_ERROR_MD5', 1);
 define('YOOMONEY_API_CHECK_RESULT_CODE_ERROR_CUSTOM', 100);
 define('YOOMONEY_API_CHECK_RESULT_CODE_ERROR_REQUEST', 200);
 define('YOOMONEY_API_DEFAULT_TAX_RATE_ID', 1);
-define('YOOMONEY_MODULE_VERSION', '2.0.0');
+define('YOOMONEY_MODULE_VERSION', '2.0.1');
 define('YOOMONEY_API_DEFAULT_PAYMENT_METHOD', \YooKassa\Model\PaymentMethodType::BANK_CARD);
 define('YOOMONEY_API_QUICK_API_PAY_VERSION', 2);
 define('YOOMONEY_API_INSTALLMENTS_MIN_AMOUNT', 3000);
@@ -311,6 +311,7 @@ function yoomoney_api_ubercart_notify()
         && $payment->getStatus() === PaymentStatus::SUCCEEDED
     ) {
         YooMoneyLogger::info('Order status completed');
+        uc_cart_checkout_complete();
         uc_order_update_status($order->order_id, YOOMONEY_API_ORDER_STATUS_COMPLETED);
         yoomoney_api_update_transaction_status($paymentId, $payment->getStatus());
         yoomoney_api_update_transaction_amount($paymentId, $payment->getAmount()->getValue());
@@ -365,6 +366,7 @@ function yoomoney_api_commerce_notify()
         && $payment->getStatus() === PaymentStatus::SUCCEEDED
     ) {
         YooMoneyLogger::info('Order status completed');
+        commerce_checkout_complete($order);
         commerce_order_status_update($order, YOOMONEY_API_ORDER_STATUS_COMPLETED);
         $transaction->status        = COMMERCE_PAYMENT_STATUS_SUCCESS;
         $transaction->remote_status = $payment->getStatus();
