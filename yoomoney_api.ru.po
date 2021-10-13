@@ -364,8 +364,8 @@ msgid "Payment via Alfa-Click"
 msgstr "Альфа-Клик"
 
 #: yoomoney_api.module:879
-msgid "Payment via Sberbank: payment by text messages or Sberbank Online"
-msgstr "Сбербанк Онлайн"
+msgid "Payment via SberPay: payment by text messages or Sberbank Online"
+msgstr "SberPay"
 
 #: yoomoney_api.module:882
 msgid "Payment via QIWI Wallet"

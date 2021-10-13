@@ -17,7 +17,7 @@ define('YOOMONEY_API_CHECK_RESULT_CODE_ERROR_MD5', 1);
 define('YOOMONEY_API_CHECK_RESULT_CODE_ERROR_CUSTOM', 100);
 define('YOOMONEY_API_CHECK_RESULT_CODE_ERROR_REQUEST', 200);
 define('YOOMONEY_API_DEFAULT_TAX_RATE_ID', 1);
-define('YOOMONEY_MODULE_VERSION', '2.0.3');
+define('YOOMONEY_MODULE_VERSION', '2.1.0');
 define('YOOMONEY_API_DEFAULT_PAYMENT_METHOD', \YooKassa\Model\PaymentMethodType::BANK_CARD);
 define('YOOMONEY_API_QUICK_API_PAY_VERSION', 2);
 define('YOOMONEY_API_INSTALLMENTS_MIN_AMOUNT', 3000);
@@ -686,7 +686,7 @@ function yoomoney_api_get_payment_methods()
         \YooKassa\Model\PaymentMethodType::WEBMONEY     => t('Payment from a WebMoney e-wallet'),
         \YooKassa\Model\PaymentMethodType::ALFABANK     => t('Payment via Alfa-Click'),
         \YooKassa\Model\PaymentMethodType::SBERBANK     => t(
-            'Payment via Sberbank: payment by text messages or Sberbank Online'
+            'Payment via SberPay: payment by text messages or Sberbank Online'
         ),
         \YooKassa\Model\PaymentMethodType::QIWI         => t('Payment via QIWI Wallet'),
         \YooKassa\Model\PaymentMethodType::TINKOFF_BANK => t('Tinkoff online banking'),
