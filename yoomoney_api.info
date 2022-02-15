@@ -2,5 +2,5 @@ name = YooMoney Core
 description = YooMoney core module.
 package = YooMoney
 core = 7.x
-version = 2.1.1
+version = 2.1.2
 configure = admin/config/system/yoomoney_api
