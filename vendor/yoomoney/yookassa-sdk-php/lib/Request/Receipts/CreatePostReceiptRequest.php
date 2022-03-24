@@ -70,6 +70,9 @@ class CreatePostReceiptRequest extends AbstractRequest implements CreatePostRece
     /** @var string Идентификатор объекта оплаты */
     private $_object_id;
 
+    /** @var string Тип объекта: приход "payment" или возврат "refund". */
+    private $_object_type;
+
     /** @var string Идентификатор магазина в ЮKassa */
     private $_onBehalfOf;
 
@@ -100,6 +103,26 @@ class CreatePostReceiptRequest extends AbstractRequest implements CreatePostRece
     public function setObjectId($value)
     {
         $this->_object_id = $value;
+    }
+
+    /**
+     * Возвращает тип объекта чека
+     *
+     * @return string Тип объекта чека
+     */
+    public function getObjectType()
+    {
+        return $this->_object_type;
+    }
+
+    /**
+     * Устанавливает тип объекта чека
+     *
+     * @param string $value Тип объекта чека
+     */
+    public function setObjectType($value)
+    {
+        $this->_object_type = $value;
     }
 
     /**
@@ -262,6 +285,9 @@ class CreatePostReceiptRequest extends AbstractRequest implements CreatePostRece
                 throw new InvalidPropertyValueException('Invalid receipt type value', 0, 'Receipt.type', $value);
             }
             $this->_type = (string)$value;
+            if (!$this->_object_type) {
+                $this->_object_type = $this->_type;
+            }
         } else {
             throw new InvalidPropertyValueTypeException(
                 'Invalid receipt type value type', 0, 'Receipt.type', $value
@@ -429,6 +455,16 @@ class CreatePostReceiptRequest extends AbstractRequest implements CreatePostRece
 
         if (empty($this->_type) || !ReceiptType::valueExists($this->_type)) {
             $this->setValidationError('Receipt type not specified');
+            return false;
+        }
+
+        if (empty($this->_object_type)) {
+            $this->setValidationError('Receipt object_type not specified');
+            return false;
+        }
+
+        if (empty($this->_object_id)) {
+            $this->setValidationError('Receipt object_id not specified');
             return false;
         }
 
